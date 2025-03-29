@@ -1,3 +1,5 @@
 data/*
 docs/external_supporting/*
 docs/external_supporting
+src/__pycache__
+docs/dev_docs
