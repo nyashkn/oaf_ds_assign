@@ -1,0 +1,215 @@
+---
+title: "One Acre Fund: Loan Performance Analysis"
+format:
+  html:
+    code-fold: true
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    fig-width: 10
+    fig-height: 6
+    output-dir: src/quatro_temp
+    resources:
+      - src/quatro_temp
+    execute:
+      cache: true
+      freeze: auto  # Options: true, false, auto
+      cache-dir: _cache  # Custom cache directory path
+jupyter: python3
+---
+
+```{python}
+#| label: setup
+#| include: false
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pathlib import Path
+import sys
+import os
+
+# Add parent directory to Python path for imports
+current_dir = Path(os.getcwd())
+if current_dir.name == 'src':
+    project_dir = current_dir.parent
+else:
+    project_dir = current_dir
+sys.path.append(str(project_dir))
+
+from src import analysis
+
+# Set style for plots
+plt.style.use('seaborn-v0_8')
+```
+
+## Executive Summary
+
+This analysis examines loan performance data from One Acre Fund's lending program, focusing on repayment rates, portfolio composition, and key performance indicators.
+
+```{python}
+#| label: load-data
+#| include: false
+
+# Load and preprocess data
+raw_data = analysis.load_data("../data/raw/training_loan_processed.csv")
+df = analysis.preprocess_data(raw_data)
+```
+
+```{python}
+#| label: summary-stats
+#| echo: false
+
+stats = analysis.get_summary_statistics(df)
+
+print(f"""
+## Key Metrics
+
+**Portfolio Size**
+- Total Loans: {stats['loan_count']:,}
+- Average Loan Value: KES {stats['avg_loan_value']:,.0f}
+- Median Loan Value: KES {stats['median_loan_value']:,.0f}
+
+**Repayment Performance**
+- Average Rate: {stats['avg_repayment_rate']:.1%}
+- Target Achievement: {stats['target_achievement_rate']:.1%}
+- Median Deposit Ratio: {stats['median_deposit_ratio']:.1%}
+
+**Portfolio Composition**""")
+
+for loan_type, count in stats['loan_type_counts'].items():
+    print(f"- {loan_type}: {count:,} loans")
+```
+
+## Portfolio Analysis
+
+```
+
+## Portfolio Analysis
+
+### Loan Portfolio Composition
+
+```{python}
+#| label: portfolio-composition
+#| echo: false
+#| fig-cap: "Distribution of loan types in the portfolio"
+
+fig = analysis.plot_loan_portfolio_composition(df)
+plt.tight_layout()
+```
+
+### Repayment Rate Distribution
+
+```{python}
+#| label: repayment-distribution
+#| echo: false
+#| fig-cap: "Distribution of repayment rates across all loans"
+
+fig = analysis.plot_repayment_distribution(df)
+plt.tight_layout()
+```
+
+## Regional Analysis
+
+### Performance by Region
+
+```{python}
+#| label: regional-performance
+#| echo: false
+#| fig-cap: "Repayment rates by region with confidence intervals"
+
+fig = analysis.plot_regional_performance(df)
+plt.tight_layout()
+```
+
+## Loan Value Analysis
+
+### Loan Value vs Repayment Rate
+
+```{python}
+#| label: loan-value-repayment
+#| echo: false
+#| fig-cap: "Relationship between loan value and repayment rate"
+
+fig = analysis.plot_loan_value_repayment(df)
+plt.tight_layout()
+```
+
+## Deposit Analysis
+
+### Impact of Deposit Ratio
+
+```{python}
+#| label: deposit-analysis
+#| echo: false
+#| fig-cap: "Repayment performance by deposit ratio quintiles"
+
+fig, stats = analysis.analyze_deposit_ratio(df)
+plt.tight_layout()
+
+print("\n**Deposit Ratio Statistics:**")
+print(stats.round(4).to_markdown())
+```
+
+## Temporal Analysis
+
+### Repayment Trends Over Time
+
+```{python}
+#| label: temporal-analysis
+#| echo: false
+#| fig-cap: "Monthly repayment rate trends"
+
+fig, stats = analysis.analyze_temporal_trends(df, n_bins=6)
+plt.tight_layout()
+
+print("\n**Monthly Performance Statistics:**")
+print(stats.round(4).to_markdown())
+```
+
+## Client Segmentation
+
+### Client Performance Groups
+
+```{python}
+#| label: client-segments
+#| echo: false
+#| fig-cap: "Client segmentation based on repayment performance"
+
+fig, stats = analysis.segment_clients(df)
+plt.tight_layout()
+
+print("\n**Segment Statistics:**")
+print(stats.round(4).to_markdown())
+```
+
+## Geographic Analysis
+
+### Regional and Area Performance
+
+```{python}
+#| label: geographic-analysis
+#| echo: false
+#| fig-cap: "Geographic patterns in repayment performance"
+
+fig, stats = analysis.analyze_geographic_patterns(df)
+plt.tight_layout()
+
+print("\n**Geographic Performance Statistics:**")
+print(stats.round(4).to_markdown())
+```
+
+## Executive Dashboard
+
+```{python}
+#| label: executive-dashboard
+#| echo: false
+#| fig-cap: "Executive summary dashboard"
+
+fig = analysis.create_executive_dashboard(df)
+plt.tight_layout()
+```
+
+Code and data processing steps available in:
+- `src/analysis.py`
+- Generated visualizations in `data/processed/`

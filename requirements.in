@@ -6,6 +6,7 @@ numpy
 matplotlib
 seaborn
 plotly
+tabulate
 
 # Machine learning and statistics
 scikit-learn
@@ -14,7 +15,8 @@ statsmodels
 
 # Development tools
 jupyter
-marimo
+quarto
+jupyter-cache
 
 # Utilities
 python-dateutil
