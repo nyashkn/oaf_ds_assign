@@ -123,6 +123,86 @@ graph TD
 | [Job Postings](https://jobs.thewia.org/companies/one-acre-fund) | Primary | 2023 | Operational details |
 | Field Observations | Primary | 2023-2024 | Implementation insights |
 
+## 9. Agricultural Products and Inputs
+
+### 9.1 Crop Inputs
+
+| Category | Products | Details |
+|----------|----------|----------|
+| Staple Crops | - Hybrid maize (H614, H629)<br>- Climbing & bush beans<br>- Sorghum<br>- Millet | - 53% higher yields than local varieties<br>- Optimized spacing (75cm x 30cm)<br>- Drought-tolerant options |
+| Commercial Crops | - Hass avocados<br>- Macadamia<br>- Sunflowers | - Export market access<br>- GlobalGAP certification<br>- Climate-adaptive varieties |
+| Indigenous Vegetables | - Managu (African nightshade)<br>- Sagaa (Spider plant)<br>- Local greens | - 30% more iron than cabbage<br>- pH-balanced fertilizers<br>- Traditional varieties |
+
+### 9.2 Seasonal Planting Calendar
+
+| Season | Period | Main Crops | Support Provided |
+|--------|---------|------------|-----------------|
+| Long Rains | March-May | - Primary maize planting<br>- Main season crops | - Hybrid seeds<br>- NPK fertilizers<br>- Technical training |
+| Short Rains | October-December | - Legumes (soybeans, bush beans)<br>- Drought-resistant crops | - Rotation planning<br>- Soil improvement<br>- Pest management |
+
+### 9.3 Animal-Related Products
+
+| Category | Products | Features |
+|----------|----------|----------|
+| Poultry Equipment | - 20L automatic nipple drinkers<br>- Automatic bucket feeders<br>- Feed storage solutions | - Labor-saving design<br>- Durable materials<br>- Easy maintenance |
+| Fodder Trees | - Calliandra<br>- Grevillea | - 6kg/day yield per mature tree<br>- $10.40 ROI per $1 invested<br>- Dual-purpose benefits |
+| Cover Crops | - Mucuna pruriens<br>- Other legumes | - 18-22% crude protein<br>- Soil improvement<br>- Feed supplement |
+
+### 9.4 Input Quality Management
+
+| Aspect | Implementation | Impact |
+|--------|----------------|---------|
+| Seed Testing | Multi-year trials | Climate resilience |
+| Fertilizer Distribution | 6,000+ metric tons annually | Enhanced yields |
+| Quality Control | Rigorous standards | Consistent results |
+
+### 9.5 Sustainability Initiatives
+
+| Initiative | Details | Benefits |
+|------------|---------|-----------|
+| Tree Program | - 20 free seedlings per farmer<br>- 56M seedlings in 2024 | - Environmental protection<br>- Income diversification |
+| Soil Health | - pH testing protocols<br>- Organic matter management | - 15% yield increase<br>- Long-term sustainability |
+| Crop Rotation | - Maize-legume rotations<br>- Cover cropping | - Soil fertility<br>- Pest management |
+
+### 9.2 Animal-Related Products
+
+| Product Type | Description | Availability |
+|--------------|-------------|--------------|
+| Poultry Equipment | - Automatic nipple drinkers (20L)<br>- Automatic bucket feeders<br>- Chicken feeding equipment | Through Tupande app and dukas |
+| Livestock Support | - Veterinary services<br>- Animal feed<br>- Farming tools | Partnership with county veterinary offices |
+
+### 9.3 Input Distribution
+
+| Metric | Scale | Coverage |
+|--------|-------|----------|
+| Seed Distribution | 500+ metric tons | Kenya operations |
+| Fertilizer Supply | 6,000+ metric tons | 80,000+ farmers |
+| Service Points | 110+ dukas | Multiple regions |
+
+### 9.4 Product Testing and Quality
+
+| Process | Implementation | Purpose |
+|---------|----------------|---------|
+| Variety Testing | Multi-year trials | Climate suitability |
+| Quality Control | Rigorous standards | Performance assurance |
+| Research & Development | Continuous programs | Product improvement |
+
+### 9.5 Access Channels
+
+| Channel | Products Available | Features |
+|---------|-------------------|----------|
+| Tupande App | - Seeds<br>- Fertilizers<br>- Equipment<br>- Solar products | - Digital ordering<br>- Product information<br>- Delivery options |
+| Duka Network | - Full product range<br>- Seasonal inputs<br>- Equipment | - Physical locations<br>- Expert advice<br>- Immediate access |
+| Field Agents | - Core inputs<br>- Season-specific products | - Direct delivery<br>- Technical support<br>- Training included |
+
+## 10. Additional Sources
+
+| Source | Type | Date | Key Insights |
+|--------|------|------|--------------|
+| [Farm Supplies](https://oneacrefund.org/what-we-do/areas-focus/farm-supplies) | Primary | 2024 | Product details |
+| [Behind the Scenes](https://oneacrefund.org/articles/behind-scenes-seed-and-fertilizer-procurement) | Article | 2023 | Distribution scale |
+| [Tupande App](https://www.tiktok.com/@caleb.karuga/video/7363148036652010758) | Marketing | 2024 | Digital access |
+
 ## 7. Marketing and Customer Acquisition
 
 ### 7.1 Marketing Strategy
