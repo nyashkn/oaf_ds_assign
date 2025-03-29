@@ -1,0 +1,239 @@
+# Project Documentation Support
+
+i) We are using uv for python environment management. Python version >= 3.10.
+ii) Include to requirements.in file without the version number. uv will manage and figure out the dependencies.
+
+# Software Development Principles Guide to Follow
+
+## Core Principles Overview
+
+### 1. KISS (Keep It Simple, Stupid)
+**Principle:** Write code that is simple to understand and maintain.
+
+**Guidelines:**
+- Write clear, self-documenting code
+- Use standard patterns over clever solutions
+- Break complex problems into smaller, manageable pieces
+- Limit function/method size and complexity
+
+**Examples:**
+✅ Good:
+```python
+def calculate_total(items):
+    return sum(item.price for item in items)
+```
+
+❌ Bad:
+```python
+def calculate_total(items):
+    tmp = 0
+    for i in range(len(items)):
+        tmp = tmp + (items[i].price if items[i] and hasattr(items[i], 'price') else 0)
+    return tmp
+```
+
+### 2. YAGNI (You Aren't Gonna Need It)
+**Principle:** Only implement features that are needed now.
+
+**Guidelines:**
+- Focus on current requirements
+- Avoid speculative features
+- Remove unused code
+- Question "future-proof" additions
+
+**Examples:**
+✅ Good:
+```python
+class UserService:
+    def get_user(self, user_id):
+        return self.db.find_user(user_id)
+```
+
+❌ Bad:
+```python
+class UserService:
+    def get_user(self, user_id, include_future_data=False,
+                 with_analytics=False, cache_strategy="none"):
+        # Unnecessary complexity for features not yet needed
+        pass
+```
+
+### 3. DRY (Don't Repeat Yourself)
+**Principle:** Every piece of knowledge or logic should have a single, unambiguous representation in the codebase.
+
+**Guidelines:**
+- Avoid code duplication
+- Extract common functionality into reusable components
+- Use inheritance and composition effectively
+- Create shared utilities for common operations
+
+**Examples:**
+✅ Good:
+```python
+# Shared validation module
+class EmailValidator:
+    EMAIL_REGEX = r'\A[^@\s]+@[^@\s]+\.[^@\s]+\z'
+    
+    @classmethod
+    def validate_email(cls, email):
+        import re
+        if not re.match(cls.EMAIL_REGEX, email):
+            raise ValueError("Invalid email format")
+
+
+class UserService:
+    def register(self, email):
+        EmailValidator.validate_email(email)
+        # Registration logic
+
+
+class NewsletterService:
+    def subscribe(self, email):
+        EmailValidator.validate_email(email)
+        # Subscription logic
+```
+
+❌ Bad:
+```python
+class UserService:
+    def register(self, email):
+        # Duplicated email validation
+        import re
+        email_regex = r'\A[^@\s]+@[^@\s]+\.[^@\s]+\z'
+        if not re.match(email_regex, email):
+            raise ValueError("Invalid email format")
+        # Registration logic
+
+
+class NewsletterService:
+    def subscribe(self, email):
+        # Same validation duplicated
+        import re
+        email_regex = r'\A[^@\s]+@[^@\s]+\.[^@\s]+\z'
+        if not re.match(email_regex, email):
+            raise ValueError("Invalid email format")
+        # Subscription logic
+```
+
+### 4. SOLID Principles
+#### Single Responsibility Principle
+**Principle:** A class should have only one reason to change.
+
+**Guidelines:**
+- Each class should do one thing well
+- Separate concerns into different classes
+- Avoid god classes/methods
+
+**Example:**
+✅ Good:
+```python
+class EmailValidator:
+    def is_valid(self, email): 
+        pass
+
+class EmailSender:
+    def send(self, email, content): 
+        pass
+```
+
+❌ Bad:
+```python
+class EmailService:
+    def validate(self, email): 
+        pass
+    def send(self, email): 
+        pass
+    def store(self, email): 
+        pass
+    def format(self, email): 
+        pass
+```
+
+#### Open-Closed Principle
+**Principle:** Software entities should be open for extension but closed for modification.
+
+**Guidelines:**
+- Use interfaces and abstract classes
+- Enable adding features through inheritance/composition
+- Avoid modifying existing code
+
+**Example:**
+✅ Good:
+```python
+from abc import ABC, abstractmethod
+
+class PaymentProcessor(ABC):
+    @abstractmethod
+    def process(self, payment):
+        pass
+
+class CreditCardProcessor(PaymentProcessor):
+    def process(self, payment):
+        # Credit card specific logic
+        pass
+
+class PayPalProcessor(PaymentProcessor):
+    def process(self, payment):
+        # PayPal specific logic
+        pass
+```
+
+#### Liskov Substitution Principle
+**Principle:** Subtypes must be substitutable for their base types.
+
+**Guidelines:**
+- Maintain base class contracts
+- Don't strengthen preconditions
+- Don't weaken postconditions
+
+#### Interface Segregation Principle
+**Principle:** Clients shouldn't depend on interfaces they don't use.
+
+**Guidelines:**
+- Keep interfaces small and focused
+- Split large interfaces into smaller ones
+- Don't force clients to implement unnecessary methods
+
+#### Dependency Inversion Principle
+**Principle:** Depend on abstractions, not concretions.
+
+**Guidelines:**
+- Use dependency injection
+- Program to interfaces
+- Avoid direct instantiation of dependencies
+
+## Implementation Checklist
+- [ ] Is the code as simple as possible while meeting requirements?
+- [ ] Are all implemented features currently needed?
+- [ ] Does each class/module have a single responsibility?
+- [ ] Can the code be extended without modification?
+- [ ] Are interfaces small and focused?
+- [ ] Are dependencies properly abstracted?
+
+## Anti-Patterns to Avoid
+1. Premature optimization
+2. Speculative generality
+3. God classes/methods
+4. Tight coupling
+5. Leaky abstractions
+
+# Security
+
+## Sensitive Files
+
+DO NOT read or modify:
+
+-   .env files
+-   \*_/config/secrets._
+-   \*_/_.pem
+-   Any file containing API keys, tokens, or credentials
+
+## Security Practices
+
+-   Never commit sensitive files
+-   Use environment variables for secrets
+-   Keep credentials out of logs and output
+
+## Guides and Best Practices
+- Check project files before suggesting structural or dependency changes
+- Ask 'stupid' questions like: are you sure this is the best way to implement this?

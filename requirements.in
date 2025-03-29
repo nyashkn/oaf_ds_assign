@@ -1,0 +1,19 @@
+# Data manipulation and analysis
+pandas
+numpy
+
+# Visualization
+matplotlib
+seaborn
+plotly
+
+# Machine learning and statistics
+scikit-learn
+scorecardpy
+statsmodels
+
+# Development tools
+jupyter
+
+# Utilities
+python-dateutil
