@@ -53,17 +53,22 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     df['contract_start_date'] = pd.to_datetime(df['contract_start_date'])
     
     # Calculate derived metrics
-    df['repayment_rate'] = df['cumulative_amount_paid_start'] / df['nominal_contract_value']
+    df['sept_23_repayment_rate'] = df['cumulative_amount_paid_start'] / df['nominal_contract_value']
     df['deposit_ratio'] = df['deposit_amount'] / df['nominal_contract_value']
-    
-    # Handle extreme values - optional caps on repayment rate
-    # Uncomment if needed:
-    # df['repayment_rate'] = df['repayment_rate'].clip(lower=-1, upper=2)
+    df['nov_23_repayment_rate'] = df['cumulative_amount_paid'] / df['nominal_contract_value'] 
     
     # Calculate time-based features
     df['month'] = df['contract_start_date'].dt.to_period('M')
     df['months_since_start'] = (df['contract_start_date'] - df['contract_start_date'].min()).dt.days / 30
     df['days_since_start'] = (df['contract_start_date'] - df['contract_start_date'].min()).dt.days
+
+    df['days_diff_contract_start_to_sept_23'] = (pd.to_datetime('2023-09-01') - df['contract_start_date']).dt.days
+    df['days_diff_contract_start_to_nov_23'] = (pd.to_datetime('2023-11-01') - df['contract_start_date']).dt.days
+    df['month_diff_contract_start_to_sept_23'] = (pd.to_datetime('2023-09-01') - df['contract_start_date']).dt.days / 30
+    df['month_diff_contract_start_to_nov_23'] = (pd.to_datetime('2023-11-01') - df['contract_start_date']).dt.days / 30
+    
+    df['diff_nov_23_to_sept_23_repayment_rate'] = df['nov_23_repayment_rate'] - df['sept_23_repayment_rate']
+    
     df['contract_start_day'] = df['contract_start_date'].dt.day
     
     return df

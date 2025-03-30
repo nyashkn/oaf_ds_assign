@@ -18,6 +18,16 @@ graph TD
 # Part 1.1
 - Determine cut-off 
 
+# To check:
+- Disticts: Regions, dukas, area, sales_territory
+
+## Feature Eng. Ideas:
+- Variables available at the time of loan application are: client_id,Loan_Type,region,duka_name,nominal_contract_value,deposit_amount,contract_start_date,area,sales_territory
+- Variables post loan application are: cumulative_amount_paid_start, cumulative_amount_paid
+- Variables not found in hold-out data: cumulative_amount_paid. Can use it just for insights.
+## Feature Eng. Ideas:
+- Regional features: Cummulative count of loans, Cum deposit amount, cum distinct customers, cum nominal contract value,  per region at point of client application, distinct number of dukas in region, distinct sales_territory, distinct areas 
+- Reverse geolocate from duka_name to get lat/long and use it to get distance from i) duka to region centroid, ii) duka to urban cities (i.e. Kisumu, Nairobi, Mombasa) 
 
 # Part 2
 
