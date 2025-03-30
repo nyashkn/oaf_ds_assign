@@ -63,6 +63,8 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate time-based features
     df['month'] = df['contract_start_date'].dt.to_period('M')
     df['months_since_start'] = (df['contract_start_date'] - df['contract_start_date'].min()).dt.days / 30
+    df['days_since_start'] = (df['contract_start_date'] - df['contract_start_date'].min()).dt.days
+    df['contract_start_day'] = df['contract_start_date'].dt.day
     
     return df
 

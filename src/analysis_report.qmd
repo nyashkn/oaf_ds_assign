@@ -199,17 +199,7 @@ print("\n**Geographic Performance Statistics:**")
 print(stats.round(4).to_markdown())
 ```
 
-## Executive Dashboard
-
-```{python}
-#| label: executive-dashboard
-#| echo: false
-#| fig-cap: "Executive summary dashboard"
-
-fig = analysis.create_executive_dashboard(df)
-plt.tight_layout()
-```
-
+## Executive 
 Code and data processing steps available in:
 - `src/analysis.py`
 - Generated visualizations in `data/processed/`
