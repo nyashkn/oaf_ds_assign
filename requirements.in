@@ -1,12 +1,15 @@
 # Data manipulation and analysis
 pandas
 numpy
+polars
+pyarrow
 
 # Visualization
 matplotlib
 seaborn
 plotly
 tabulate
+squarify
 
 # Machine learning and statistics
 scikit-learn
