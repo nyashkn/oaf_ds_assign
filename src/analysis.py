@@ -70,6 +70,8 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     df['diff_nov_23_to_sept_23_repayment_rate'] = df['nov_23_repayment_rate'] - df['sept_23_repayment_rate']
     
     df['contract_start_day'] = df['contract_start_date'].dt.day
+    # Contract start day, Day name
+    df['contract_day_name'] = df['contract_start_date'].dt.day_name()
     
     return df
 
@@ -121,9 +123,9 @@ def plot_loan_portfolio_composition(df: pd.DataFrame) -> plt.Figure:
     
     return fig
 
-def plot_repayment_distribution(df: pd.DataFrame) -> plt.Figure:
+def plot_repayment_distribution_comparison(df: pd.DataFrame) -> plt.Figure:
     """
-    Create histogram of repayment rate distribution.
+    Create histogram comparing September and November repayment rate distributions.
     
     Args:
         df: Preprocessed loan data
@@ -131,30 +133,424 @@ def plot_repayment_distribution(df: pd.DataFrame) -> plt.Figure:
     Returns:
         Matplotlib figure object
     """
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
-    sns.histplot(data=df, x='repayment_rate', bins=30, ax=ax)
-    ax.axvline(x=0.98, color='red', linestyle='--', label='98% Target')
+    # September distribution
+    sns.histplot(data=df, x='sept_23_repayment_rate', bins=30, ax=ax1, color=OAF_BLUE)
+    ax1.axvline(x=0.98, color='red', linestyle='--', label='98% Target')
     
-    # Add summary statistics
-    stats_text = (
-        f"Mean: {df['repayment_rate'].mean():.1%}\n"
-        f"Median: {df['repayment_rate'].median():.1%}\n"
-        f"≥ 98% Target: {(df['repayment_rate'] >= 0.98).mean():.1%}\n"
+    # Add September summary statistics
+    sept_stats_text = (
+        f"Mean: {df['sept_23_repayment_rate'].mean():.1%}\n"
+        f"Median: {df['sept_23_repayment_rate'].median():.1%}\n"
+        f"≥ 98% Target: {(df['sept_23_repayment_rate'] >= 0.98).mean():.1%}\n"
         f"Sample Size: {len(df):,}"
     )
     
-    ax.text(0.02, 0.98, stats_text,
-            transform=ax.transAxes,
+    ax1.text(0.02, 0.98, sept_stats_text,
+            transform=ax1.transAxes,
             verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
-    ax.set_title('Repayment Rate Distribution', fontsize=14, fontweight='bold')
-    ax.set_xlabel('Repayment Rate')
-    ax.set_ylabel('Count')
-    ax.legend()
+    ax1.set_title('September 2023 Repayment Rate Distribution', fontsize=12, fontweight='bold')
+    ax1.set_xlabel('Repayment Rate')
+    ax1.set_ylabel('Count')
+    ax1.legend()
+    
+    # November distribution
+    sns.histplot(data=df, x='nov_23_repayment_rate', bins=30, ax=ax2, color=OAF_GREEN)
+    ax2.axvline(x=0.98, color='red', linestyle='--', label='98% Target')
+    
+    # Add November summary statistics
+    nov_stats_text = (
+        f"Mean: {df['nov_23_repayment_rate'].mean():.1%}\n"
+        f"Median: {df['nov_23_repayment_rate'].median():.1%}\n"
+        f"≥ 98% Target: {(df['nov_23_repayment_rate'] >= 0.98).mean():.1%}\n"
+        f"Sample Size: {len(df):,}"
+    )
+    
+    ax2.text(0.02, 0.98, nov_stats_text,
+            transform=ax2.transAxes,
+            verticalalignment='top',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    ax2.set_title('November 2023 Repayment Rate Distribution', fontsize=12, fontweight='bold')
+    ax2.set_xlabel('Repayment Rate')
+    ax2.set_ylabel('Count')
+    ax2.legend()
     
     plt.tight_layout()
+    plt.suptitle('Comparison of Repayment Rate Distributions', fontsize=14, fontweight='bold', y=1.05)
+    return fig
+
+
+def plot_repayment_curve_with_cure_rates(df: pd.DataFrame) -> plt.Figure:
+    """
+    Create a dual-panel visualization showing:
+    1. Left panel: Repayment progression over time with vertical lines for September and November
+    2. Right panel: Bar chart of cure rates by contract start day
+    
+    Args:
+        df: Preprocessed loan data
+        
+    Returns:
+        Matplotlib figure object
+    """
+    fig = plt.figure(figsize=(16, 7))
+    
+    # Create a 1x2 grid of subplots with different widths (left panel wider)
+    gs = fig.add_gridspec(1, 2, width_ratios=[2, 1])
+    ax1 = fig.add_subplot(gs[0, 0])  # Left panel
+    ax2 = fig.add_subplot(gs[0, 1])  # Right panel
+    
+    # ---- LEFT PANEL: Repayment progression curves ----
+    
+    # Calculate median days for September and November from contract start
+    sept_days = df['days_diff_contract_start_to_sept_23'].median()
+    nov_days = df['days_diff_contract_start_to_nov_23'].median()
+    
+    # Create a DataFrame with overall repayment progress data
+    overall_progress = pd.DataFrame({
+        'Time Point': ['Contract Start', 'September 2023', 'November 2023'],
+        'Days Since Start': [0, sept_days, nov_days],
+        'Average Repayment Rate': [0, df['sept_23_repayment_rate'].mean(), 
+                                  df['nov_23_repayment_rate'].mean()]
+    })
+    
+    # Plot overall repayment curve
+    ax1.plot(overall_progress['Days Since Start'], overall_progress['Average Repayment Rate'], 
+            'o-', color=OAF_GREEN, linewidth=3, markersize=8, label='All Loans', zorder=10)
+    
+    # Calculate cure rates by day
+    day_cure_rates = {}
+    colors = plt.cm.viridis(np.linspace(0, 1, 31))  # Color spectrum for days 1-31
+    
+    # Plot individual lines for each contract start day
+    for i, day in enumerate(sorted(df['contract_start_day'].unique())):
+        # if day > 30:  # Skip outliers
+        #     continue
+            
+        day_df = df[df['contract_start_day'] == day]
+        # if len(day_df) < 50:  # Skip days with too few loans for statistical significance
+        #     continue
+        
+        # Calculate day's repayment progression
+        day_data = pd.DataFrame({
+            'Time Point': ['Contract Start', 'September 2023', 'November 2023'],
+            'Days Since Start': [0, day_df['days_diff_contract_start_to_sept_23'].median(), 
+                                day_df['days_diff_contract_start_to_nov_23'].median()],
+            'Average Repayment Rate': [0, day_df['sept_23_repayment_rate'].mean(), 
+                                     day_df['nov_23_repayment_rate'].mean()]
+        })
+        
+        # Calculate cure rate for this day
+        day_cure_rate = day_data['Average Repayment Rate'].iloc[2] - day_data['Average Repayment Rate'].iloc[1]
+        day_cure_rates[day] = day_cure_rate
+        
+        # Plot this day's curve
+        ax1.plot(day_data['Days Since Start'], day_data['Average Repayment Rate'],
+               '--', linewidth=1, alpha=0.7, color=colors[i], label=f'Day {day}')
+    
+    # Calculate overall cure rate
+    overall_cure_rate = overall_progress['Average Repayment Rate'].iloc[2] - overall_progress['Average Repayment Rate'].iloc[1]
+    
+    # Annotate overall cure rate
+    cure_x = (overall_progress['Days Since Start'].iloc[1] + overall_progress['Days Since Start'].iloc[2]) / 2
+    cure_y = (overall_progress['Average Repayment Rate'].iloc[1] + overall_progress['Average Repayment Rate'].iloc[2]) / 2
+    
+    ax1.annotate(f"Cure rate: {overall_cure_rate:.1%}", 
+               xy=(cure_x, cure_y),
+               xytext=(0, 20), textcoords='offset points',
+               arrowprops=dict(arrowstyle='->'),
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.5),
+               fontweight='bold', zorder=15)
+    
+    # Add vertical lines for September and November
+    ax1.axvline(x=sept_days, color='darkred', linestyle='--', alpha=0.7, label='September 2023')
+    ax1.axvline(x=nov_days, color='darkblue', linestyle='--', alpha=0.7, label='November 2023')
+    
+    # Add curly brace to indicate estimated period
+    mid_early_period = sept_days / 2
+    ax1.annotate('', xy=(5, 0.15), xytext=(sept_days-5, 0.15),
+                arrowprops=dict(arrowstyle='|-|, widthA=0.5, widthB=0.5',
+                                connectionstyle='arc3, rad=0.5', color='black'))
+    ax1.text(mid_early_period, 0.1, 'Estimated curve\n(no observations)', 
+            ha='center', va='center', fontsize=9,
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    # Add key performance targets
+    ax1.axhline(y=0.98, color='red', linestyle='--', label='98% Target')
+    
+    # Format the left panel
+    ax1.set_xlabel('Days Since Contract Start')
+    ax1.set_ylabel('Repayment Rate')
+    ax1.set_title('Loan Repayment Progression Over Time', fontsize=14, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    
+    # Add stats on cured contracts
+    cured_contracts = (df['nov_23_repayment_rate'] >= 0.98) & (df['sept_23_repayment_rate'] < 0.98)
+    pct_cured = cured_contracts.mean()
+    
+    stats_text = (
+        f"Contracts below 98% in September: {(df['sept_23_repayment_rate'] < 0.98).mean():.1%}\n"
+        f"Contracts below 98% in November: {(df['nov_23_repayment_rate'] < 0.98).mean():.1%}\n"
+        f"Contracts that cured (reached 98%): {pct_cured:.1%}"
+    )
+    
+    ax1.text(0.02, 0.02, stats_text,
+           transform=ax1.transAxes,
+           verticalalignment='bottom',
+           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    # Custom legend with fewer entries to avoid overcrowding
+    handles, labels = ax1.get_legend_handles_labels()
+    # Keep 'All Loans', '98% Target', vertical lines, and some representative days
+    important_indices = [i for i, label in enumerate(labels) 
+                       if label in ['All Loans', '98% Target', 'September 2023', 'November 2023']]
+    selected_days = [1, 10, 20, 30]  # Representative days
+    day_indices = [i for i, label in enumerate(labels) 
+                 if label.startswith('Day') and int(label.split(' ')[1]) in selected_days]
+    ax1.legend([handles[i] for i in important_indices + day_indices],
+              [labels[i] for i in important_indices + day_indices],
+              loc='upper left', fontsize=8)
+    
+    # ---- RIGHT PANEL: Cure rate by contract start day bar chart ----
+    
+    # Calculate cure rate stats
+    cure_rates = list(day_cure_rates.values())
+    min_cure_rate = min(cure_rates)
+    max_cure_rate = max(cure_rates)
+    median_cure_rate = np.median(cure_rates)
+    
+    # Sort days by cure rate to see patterns
+    days = list(day_cure_rates.keys())
+    cure_rates_sorted = [day_cure_rates[day] for day in days]
+    
+    # Create bar chart
+    bars = ax2.bar(days, cure_rates_sorted, color=OAF_BLUE, alpha=0.7)
+    
+    # Highlight bars with highest and lowest cure rates
+    min_idx = cure_rates_sorted.index(min_cure_rate)
+    max_idx = cure_rates_sorted.index(max_cure_rate)
+    bars[min_idx].set_color('red')
+    bars[min_idx].set_alpha(1.0)
+    bars[max_idx].set_color('green')
+    bars[max_idx].set_alpha(1.0)
+    
+    # Add horizontal line for median and overall cure rate
+    ax2.axhline(y=median_cure_rate, color='black', linestyle='--', label=f'Median: {median_cure_rate:.1%}')
+    ax2.axhline(y=overall_cure_rate, color=OAF_GREEN, linestyle='-', label=f'Overall: {overall_cure_rate:.1%}')
+    
+    # Format the right panel
+    ax2.set_xlabel('Contract Start Day')
+    ax2.set_ylabel('Cure Rate (Nov - Sept)')
+    ax2.set_title('Cure Rate by Contract Start Day', fontsize=14, fontweight='bold')
+    ax2.set_xticks(range(0, 31, 5))  # Show every 5th day on x-axis
+    ax2.grid(True, alpha=0.3, axis='y')
+    
+    # Add cure rate stats
+    cure_stats_text = (
+        f"Cure Rate Statistics:\n"
+        f"Min: {min_cure_rate:.1%} (Day {days[min_idx]})\n"
+        f"Median: {median_cure_rate:.1%}\n"
+        f"Max: {max_cure_rate:.1%} (Day {days[max_idx]})\n"
+        f"Overall: {overall_cure_rate:.1%}"
+    )
+    
+    ax2.text(0.98, 0.02, cure_stats_text,
+           transform=ax2.transAxes,
+           verticalalignment='bottom',
+           horizontalalignment='right',
+           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    ax2.legend()
+    
+    # Adjust layout and spacing
+    plt.tight_layout()
+    
+    return fig
+
+def plot_repayment_curve_by_weekday(df: pd.DataFrame) -> plt.Figure:
+    """
+    Create a dual-panel visualization showing:
+    1. Left panel: Repayment progression over time with curves for each day of week
+    2. Right panel: Bar chart of cure rates by day of week
+    
+    Args:
+        df: Preprocessed loan data with day_name column
+        
+    Returns:
+        Matplotlib figure object
+    """
+    fig = plt.figure(figsize=(16, 7))
+    
+    # Create a 1x2 grid of subplots with different widths (left panel wider)
+    gs = fig.add_gridspec(1, 2, width_ratios=[2, 1])
+    ax1 = fig.add_subplot(gs[0, 0])  # Left panel
+    ax2 = fig.add_subplot(gs[0, 1])  # Right panel
+    
+    # ---- LEFT PANEL: Repayment progression curves by day of week ----
+    
+    # Calculate median days for September and November from contract start
+    sept_days = df['days_diff_contract_start_to_sept_23'].median()
+    nov_days = df['days_diff_contract_start_to_nov_23'].median()
+    
+    # Create a DataFrame with overall repayment progress data
+    overall_progress = pd.DataFrame({
+        'Time Point': ['Contract Start', 'September 2023', 'November 2023'],
+        'Days Since Start': [0, sept_days, nov_days],
+        'Average Repayment Rate': [0, df['sept_23_repayment_rate'].mean(), 
+                                  df['nov_23_repayment_rate'].mean()]
+    })
+    
+    # Plot overall repayment curve
+    ax1.plot(overall_progress['Days Since Start'], overall_progress['Average Repayment Rate'], 
+            'o-', color=OAF_GREEN, linewidth=3, markersize=8, label='All Loans', zorder=10)
+    
+    # Calculate cure rates by day of week
+    weekday_cure_rates = {}
+    
+    # Define standard weekday order and colors
+    weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    weekday_colors = {
+        'Monday': '#3366CC',     # Blue
+        'Tuesday': '#DC3912',    # Red
+        'Wednesday': '#FF9900',  # Orange
+        'Thursday': '#109618',   # Green
+        'Friday': '#990099',     # Purple
+        'Saturday': '#0099C6',   # Teal
+        'Sunday': '#DD4477'      # Pink
+    }
+    
+    # Plot separate curves for each day of the week
+    for weekday in weekdays:
+        weekday_df = df[df['contract_day_name'] == weekday]
+        if len(weekday_df) < 50:  # Skip days with too few loans
+            continue
+        
+        # Calculate weekday's repayment progression
+        weekday_data = pd.DataFrame({
+            'Time Point': ['Contract Start', 'September 2023', 'November 2023'],
+            'Days Since Start': [0, weekday_df['days_diff_contract_start_to_sept_23'].median(), 
+                                weekday_df['days_diff_contract_start_to_nov_23'].median()],
+            'Average Repayment Rate': [0, weekday_df['sept_23_repayment_rate'].mean(), 
+                                     weekday_df['nov_23_repayment_rate'].mean()]
+        })
+        
+        # Calculate cure rate for this weekday
+        weekday_cure_rate = weekday_data['Average Repayment Rate'].iloc[2] - weekday_data['Average Repayment Rate'].iloc[1]
+        weekday_cure_rates[weekday] = weekday_cure_rate
+        
+        # Plot this weekday's curve
+        ax1.plot(weekday_data['Days Since Start'], weekday_data['Average Repayment Rate'],
+               'o-', linewidth=2, alpha=0.8, color=weekday_colors[weekday], label=weekday)
+    
+    # Calculate overall cure rate
+    overall_cure_rate = overall_progress['Average Repayment Rate'].iloc[2] - overall_progress['Average Repayment Rate'].iloc[1]
+    
+    # Annotate overall cure rate
+    cure_x = (overall_progress['Days Since Start'].iloc[1] + overall_progress['Days Since Start'].iloc[2]) / 2
+    cure_y = (overall_progress['Average Repayment Rate'].iloc[1] + overall_progress['Average Repayment Rate'].iloc[2]) / 2
+    
+    ax1.annotate(f"Overall Cure rate: {overall_cure_rate:.1%}", 
+               xy=(cure_x, cure_y),
+               xytext=(0, 20), textcoords='offset points',
+               arrowprops=dict(arrowstyle='->'),
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.5),
+               fontweight='bold', zorder=15)
+    
+    # Add vertical lines for September and November
+    ax1.axvline(x=sept_days, color='darkred', linestyle='--', alpha=0.7, label='September 2023')
+    ax1.axvline(x=nov_days, color='darkblue', linestyle='--', alpha=0.7, label='November 2023')
+    
+    # Add curly brace to indicate estimated period
+    mid_early_period = sept_days / 2
+    ax1.annotate('', xy=(5, 0.15), xytext=(sept_days-5, 0.15),
+                arrowprops=dict(arrowstyle='|-|, widthA=0.5, widthB=0.5',
+                                connectionstyle='arc3, rad=0.5', color='black'))
+    ax1.text(mid_early_period, 0.1, 'Estimated curve\n(no observations)', 
+            ha='center', va='center', fontsize=9,
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    # Add key performance targets
+    ax1.axhline(y=0.98, color='red', linestyle='--', label='98% Target')
+    
+    # Format the left panel
+    ax1.set_xlabel('Days Since Contract Start')
+    ax1.set_ylabel('Repayment Rate')
+    ax1.set_title('Loan Repayment Progression by Day of Week', fontsize=14, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    
+    # Add stats on cured contracts
+    cured_contracts = (df['nov_23_repayment_rate'] >= 0.98) & (df['sept_23_repayment_rate'] < 0.98)
+    pct_cured = cured_contracts.mean()
+    
+    stats_text = (
+        f"Contracts below 98% in September: {(df['sept_23_repayment_rate'] < 0.98).mean():.1%}\n"
+        f"Contracts below 98% in November: {(df['nov_23_repayment_rate'] < 0.98).mean():.1%}\n"
+        f"Contracts that cured (reached 98%): {pct_cured:.1%}"
+    )
+    
+    ax1.text(0.02, 0.02, stats_text,
+           transform=ax1.transAxes,
+           verticalalignment='bottom',
+           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    # Legend with reasonable size
+    ax1.legend(loc='upper left', fontsize=8)
+    
+    # ---- RIGHT PANEL: Cure rate by day of week bar chart ----
+    
+    # Calculate cure rate stats
+    cure_rates = list(weekday_cure_rates.values())
+    if cure_rates:  # Check if we have any valid cure rates
+        min_cure_rate = min(cure_rates)
+        max_cure_rate = max(cure_rates)
+        median_cure_rate = np.median(cure_rates)
+        
+        # Get weekdays in proper order with their cure rates
+        ordered_weekdays = [day for day in weekdays if day in weekday_cure_rates]
+        ordered_rates = [weekday_cure_rates[day] for day in ordered_weekdays]
+        
+        # Create bar chart with consistent colors matching the line plot
+        bars = ax2.bar(ordered_weekdays, ordered_rates, 
+                     color=[weekday_colors[day] for day in ordered_weekdays])
+        
+        # Add horizontal line for median and overall cure rate
+        ax2.axhline(y=median_cure_rate, color='black', linestyle='--', label=f'Median: {median_cure_rate:.1%}')
+        ax2.axhline(y=overall_cure_rate, color=OAF_GREEN, linestyle='-', label=f'Overall: {overall_cure_rate:.1%}')
+        
+        # Format the right panel
+        ax2.set_xlabel('Contract Start Day of Week')
+        ax2.set_ylabel('Cure Rate (Nov - Sept)')
+        ax2.set_title('Cure Rate by Day of Week', fontsize=14, fontweight='bold')
+        plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
+        ax2.grid(True, alpha=0.3, axis='y')
+        
+        # Find days with min and max cure rates
+        min_weekday = ordered_weekdays[ordered_rates.index(min_cure_rate)]
+        max_weekday = ordered_weekdays[ordered_rates.index(max_cure_rate)]
+        
+        # Add cure rate stats
+        cure_stats_text = (
+            f"Cure Rate Statistics:\n"
+            f"Min: {min_cure_rate:.1%} ({min_weekday})\n"
+            f"Median: {median_cure_rate:.1%}\n"
+            f"Max: {max_cure_rate:.1%} ({max_weekday})\n"
+            f"Overall: {overall_cure_rate:.1%}"
+        )
+        
+        ax2.text(0.98, 0.02, cure_stats_text,
+               transform=ax2.transAxes,
+               verticalalignment='bottom',
+               horizontalalignment='right',
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        
+        ax2.legend()
+    
+    # Adjust layout and spacing
+    plt.tight_layout()
+    
     return fig
 
 def plot_regional_performance(df: pd.DataFrame) -> plt.Figure:
