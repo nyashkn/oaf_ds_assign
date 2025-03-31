@@ -63,8 +63,6 @@ Current Portfolio Statistics (Training Sample of ~37k):
 - Total Portfolio Value: KES 145,898,665 ($1,122,297)
 - Total Loans: 36,215
 - Average Loan: KES 4,029 ($31)
-- Current Repayment Rate: 78.6%
-- Target Repayment Rate: 98%
 
 Implementation Cost Impact:
 - Annual Voice AI Cost (OpenAI): $2,268

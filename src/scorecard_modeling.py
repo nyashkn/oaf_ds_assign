@@ -10,6 +10,7 @@ It handles:
 - WOE binning and transformation
 - Scorecard development using logistic regression
 - Model evaluation
+- Feature inspection and data type validation
 """
 
 import pandas as pd
@@ -17,25 +18,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import re
 from pathlib import Path
-from typing import List, Dict, Tuple, Union, Optional, Any
+from typing import List, Dict, Tuple, Union, Optional, Any, Set
 import scorecardpy as sc
 from sklearn.linear_model import LogisticRegression
 
 # Define variables that might leak information
-POTENTIAL_LEAKAGE_VARS = [
+EXLUDE_VARS = [
+    'client_id',
+    'cumulative_amount_paid',
+    'nominal_contract_value',
+    'contract_start_date',
     # These variables directly relate to or derive from the target
-    'repayment_rate', 
-    'cumulative_amount_paid_start',
-    # 'deposit_amount',
-    # 'deposit_ratio',
-    # Variables that might have collection/timing issues
-    'latest_payment_date',
-    'latest_payment_amount',
-    # Derivatives of target variables
-    'deposit_ratio_rank_region',
-    'deposit_ratio_rank_area',
-    'deposit_ratio_rank_sales_territory'
+    'sept_23_repayment_rate', 
+    'nov_23_repayment_rate',
+    'months_since_start',
+    'days_since_start'
 ]
 
 def create_binary_target(
@@ -90,7 +89,7 @@ def exclude_leakage_variables(
         Tuple containing (filtered DataFrame, list of excluded variables)
     """
     # Start with standard leakage variables
-    exclude_vars = POTENTIAL_LEAKAGE_VARS.copy()
+    exclude_vars = EXLUDE_VARS.copy()
     
     # Add additional exclusions if provided
     if additional_exclusions:
