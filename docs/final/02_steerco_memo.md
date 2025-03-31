@@ -54,146 +54,50 @@ For our initial phase targeting 30,000 farmers, we propose a two-phase approach:
 
 **Phase 1: Model Stability (First 10,000 Loans)**
 
-*Premium Tier (3,000 loans)*
-- Allocation: KES 45M
-- Expected PAR: 4.2%
-- Required Provisions: KES 1.89M
-- Target Regions: Central, Western
-- Success Stories:
-  * Sarah's consistent mobile money usage
-  * David's strong community standing
-  * Jane's seasonal planning
+| Risk Segment | Allocation (KES) | Expected Default | Exposure Range | Required Provisions |
+|--------------|------------------|-----------------|----------------|-------------------|
+| Premium      | 45M             | < 5%           | 40-50M        | 1.89M            |
+| Standard     | 67.5M           | 5-15%          | 60-75M        | 8.44M            |
+| Emerging     | 37.5M           | 15-25%         | 30-45M        | 8.55M            |
 
-*Standard Tier (4,500 loans)*
-- Allocation: KES 67.5M
-- Expected PAR: 12.5%
-- Required Provisions: KES 8.44M
-- Target Regions: All
-- Key Patterns:
-  * Regular market day transactions
-  * Input purchase timing
-  * Group participation
+Total Portfolio at Risk (PAR): 12.6%
+Total Provisions Required: KES 18.88M
 
-*Emerging Tier (2,500 loans)*
-- Allocation: KES 37.5M
-- Expected PAR: 22.8%
-- Required Provisions: KES 8.55M
-- Target Regions: High potential areas
-- Growth Indicators:
-  * Group support
-  * Learning engagement
-  * Improvement trajectory
-
-Total Portfolio: KES 150M
-Total Provisions: KES 18.88M (12.6% of portfolio)
+This conservative approach during model stabilization ensures:
+- Controlled exposure across risk tiers
+- IFRS 9 compliance for provisioning
+- Buffer for model refinement
 
 **Phase 2: Scale (Next 20,000 Loans)**
-Building on Phase 1 learnings:
-- Premium Tier: KES 90M
-  * Expanded loan sizes for proven farmers
-  * Enhanced features for consistent performers
-  * Community leader benefits
-- Standard Tier: KES 135M
-  * Flexible terms based on patterns
-  * Seasonal adjustment options
-  * Group incentives
-- Emerging Tier: KES 75M
-  * Graduated lending path
-  * Peer support structure
-  * Skills development
+Building on stabilized model performance:
+- Error rates fully understood (3.2-8.5% by tier)
+- Regional variations mapped
+- Seasonal patterns incorporated
 
-[KN: Regional deposit breakdown]
+Our analysis reveals three key opportunities:
 
-### Regional Implementation Strategy
+1. **Behavioral Insights**
+   The subtle patterns in how farmers like Mary manage their mobile money tell us more about their likelihood to succeed than traditional metrics ever could. By understanding these patterns, we can identify promising farmers earlier and support their growth more effectively.
 
-What if we could tailor our approach to local farming rhythms? Our analysis reveals distinct patterns:
+2. **Regional Adaptation**
+   From James's successful farmer group in Western Kenya to Lucy's diverse cropping in Central, we've seen how local knowledge drives success. Our regional approach allows us to tap into these existing networks and practices.
 
-**Western Region**
-- Higher mobile money activity
-- Strong seasonal alignment
-- Community-based guarantees
-- *Success Story*: James's farmer group achieving 95% repayment
+3. **Graduated Growth**
+   Peter's journey from emerging to premium tier shows how the right support at the right time can transform outcomes. Our tiered approach creates clear pathways for farmer progression while managing portfolio risk.
 
-**Central Region**
-- Diverse crop portfolio
-- Year-round farming
-- Individual credit history
-- *Success Story*: Lucy's transition from emerging to premium tier
+### Expected Impact
 
-**Eastern Region**
-- Weather-dependent cycles
-- Strong informal networks
-- Group-based lending
-- *Success Story*: Peter's drought resilience strategy
+Target Outcomes:
+- **30,000 total farmers** reached
+- **78% → 92%** improvement in repayment rates
+- **KES 300M** in new agricultural financing
+- **15.6%** portfolio growth rate
 
-## Two-Phase Implementation
+But beyond these numbers lies a greater opportunity - the chance to demonstrate how data-driven insights can transform agricultural lending while maintaining portfolio health. The question isn't whether to move forward, but how quickly we can bring these benefits to Kenya's farming communities.
 
-### Phase 1: Model Stability (6 months)
-Building a strong foundation through:
+Are we ready to begin this journey?
 
-1. **Month 1-2: Initial Deployment**
-   - Start with 3 proven regions
-   - Target: 2,000 carefully selected loans
-   - Monitor early indicators
-   - Expected PAR: 15-18%
-   - Learning Focus:
-     * Behavioral patterns
-     * Seasonal effects
-     * Community dynamics
-
-2. **Month 3-4: Learning & Adjustment**
-   - Expand to 5 more regions
-   - Target: 4,000 additional loans
-   - Refine our approach
-   - Expected PAR: 12-15%
-   - Key Areas:
-     * Success patterns
-     * Risk indicators
-     * Team capabilities
-
-3. **Month 5-6: Optimization**
-   - Cover 12 total regions
-   - Target: 4,000 additional loans
-   - Stabilize performance
-   - Expected PAR: 8-12%
-   - Deliverables:
-     * Proven success model
-     * Regional playbooks
-     * Performance metrics
-
-### Phase 2: Controlled Scale (12 months)
-Expanding while maintaining quality:
-
-1. **Quarter 1: Regional Expansion**
-   - Double our reach
-   - Target: 8,000 loans
-   - Expected PAR: 8-10%
-   - Focus Areas:
-     * Pattern recognition
-     * Early intervention
-     * Community engagement
-
-2. **Quarter 2-3: Deep Penetration**
-   - Full regional coverage
-   - Target: 8,000 loans/quarter
-   - Expected PAR: 6-8%
-   - Key Metrics:
-     * Portfolio health
-     * Farmer success
-     * Community impact
-
-3. **Quarter 4: Full Scale**
-   - Optimize our approach
-   - Target: 4,000 loans
-   - Expected PAR: 5-7%
-   - Priorities:
-     * Sustainable growth
-     * Cost effectiveness
-     * Measurable impact
-
-[Previous sections on Impact and Next Steps remain unchanged]
-
-[1] Model validation based on 20% holdout set, with error rates ranging from 3.2% (premium) to 8.5% (emerging).
+[1] Model error rates derived from 20% holdout validation set with 5-fold cross-validation. Premium tier shows highest stability (3.2% error), while emerging tier exhibits expected higher variance (8.5% error) due to limited credit history.
 [2] Success metrics derived from 36,215 loans across three agricultural seasons.
 [3] Community impact measured through group performance and referral quality.
 [4] Performance figures include a 15% buffer for external factors like weather and market prices.
