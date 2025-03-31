@@ -20,3 +20,6 @@ jupyter-cache
 
 # Utilities
 python-dateutil
+
+# Geolocation Package
+geopy

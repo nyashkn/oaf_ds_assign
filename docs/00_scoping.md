@@ -29,6 +29,10 @@ graph TD
 - Regional features: Cummulative count of loans, Cum deposit amount, cum distinct customers, cum nominal contract value,  per region at point of client application, distinct number of dukas in region, distinct sales_territory, distinct areas 
 - Reverse geolocate from duka_name to get lat/long and use it to get distance from i) duka to region centroid, ii) duka to urban cities (i.e. Kisumu, Nairobi, Mombasa) 
 
+
+
+## Observatins
+- Day of the week when someone took the facility affects the cure-rates. Sunday has a below than average cure-rate. So someone taking a loan on a Sunday, affects the cure-rate. Why is Sunday having a lower-level of importance?
 # Part 2
 
 ## 

@@ -946,7 +946,7 @@ def create_executive_dashboard(df: pd.DataFrame) -> plt.Figure:
     
     return fig
 
-# ---- Advanced Analysis Functions ----
+# ---- Analysis Functions ----
 
 def segment_clients(df: pd.DataFrame) -> Tuple[plt.Figure, pd.DataFrame]:
     """
