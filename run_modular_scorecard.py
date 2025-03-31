@@ -9,6 +9,10 @@ Example usage:
     python run_modular_scorecard.py --features data/processed/all_features.csv --target sept_23_repayment_rate --sample 1000
 """
 
+# Set matplotlib backend to non-interactive
+import matplotlib
+matplotlib.use('Agg')
+
 import argparse
 import sys
 import os

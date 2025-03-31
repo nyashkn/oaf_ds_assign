@@ -62,7 +62,8 @@ def find_optimal_cutoff(
     step: float = 0.05,
     min_bad_rate: float = 0.1,
     max_bad_rate: float = 0.3,
-    plot: bool = True
+    plot: bool = True,
+    output_path: Optional[str] = None
 ) -> Dict[str, Union[float, pd.DataFrame]]:
     """
     Find optimal cutoff for creating binary target variable.
@@ -140,7 +141,15 @@ def find_optimal_cutoff(
         plt.title('Bad Rate by Repayment Rate Cutoff')
         plt.legend()
         plt.tight_layout()
-        plt.show()
+        
+        # Save plot to file
+        if output_path:
+            plot_dir = os.path.dirname(output_path)
+            plot_path = os.path.join(plot_dir, "cutoff_plot.png")
+            plt.savefig(plot_path)
+            print(f"Cutoff plot saved to {plot_path}")
+        
+        plt.close()
     
     return {
         'optimal_cutoff': optimal_cutoff,
@@ -150,7 +159,8 @@ def find_optimal_cutoff(
 
 def analyze_repayment_distribution(
     df: pd.DataFrame, 
-    target_var: str = 'repayment_rate'
+    target_var: str = 'repayment_rate',
+    output_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Analyze the distribution of repayment rates to help determine a suitable cutoff.
@@ -231,6 +241,13 @@ def analyze_repayment_distribution(
     plt.grid(True, linestyle='--', alpha=0.7)
     
     plt.tight_layout()
-    plt.show()
     
+    # Save plot to file
+    if output_path:
+        plot_dir = os.path.dirname(output_path)
+        plot_path = os.path.join(plot_dir, "repayment_distribution.png")
+        plt.savefig(plot_path)
+        print(f"Repayment distribution plot saved to {plot_path}")
+    
+    plt.close()
     return stats

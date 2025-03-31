@@ -222,11 +222,28 @@ def evaluate_model_performance(
     print(f"  Gini: {test_perf['Gini']:.4f}")
     
     # Calculate PSI
-    psi_result = sc.perf_psi(
-        score={'train': pd.DataFrame({'score': train_pred}), 
-               'test': pd.DataFrame({'score': test_pred})},
-        label={'train': train_actual, 'test': test_actual}
-    )
+    score = {
+        'train': pd.DataFrame({'score': train_pred}),
+        'test': pd.DataFrame({'score': test_pred})
+    }
+    label = {
+        'train': pd.Series(train_actual),
+        'test': pd.Series(test_actual)
+    }
+    
+    try:
+        psi_result = sc.perf_psi(
+            score=score,
+            label=label,
+            return_distr_dat=True,  # Ensure we get distribution data
+            show_plot=False  # Prevent interactive plots
+        )
+    except Exception as e:
+        print(f"Warning: PSI calculation failed - {str(e)}")
+        psi_result = {
+            'psi': pd.DataFrame({'PSI': [float('nan')]}),
+            'pic': None
+        }
     
     print(f"\nPopulation Stability Index (PSI): {psi_result['psi']['PSI'].values[0]:.4f}")
     
