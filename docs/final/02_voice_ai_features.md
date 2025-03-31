@@ -1,6 +1,6 @@
 # Voice AI Features for Loan Repayment Prediction
 
-Note: Features need to be normalized based on field agent's historical call patterns. We should create a categorical variable agent_id by clustering agents based on their typical conversation style (% time talking, chitchat level, etc.).
+Note: Features need to be normalized based on field agent's historical call patterns. We should create a categorical variable agent_group_id by clustering agents based on their typical conversation style (% time talking, chitchat level, etc.).
 
 ## 1. Call Metadata Features
 

@@ -12,6 +12,55 @@ from typing import Tuple, Dict, Any, Optional
 import os
 import time
 
+def calculate_regional_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate regional features including cumulative metrics and distinct counts.
+    
+    Args:
+        df: Preprocessed loan data
+        
+    Returns:
+        DataFrame with added regional features:
+        - Cumulative loan count per region
+        - Cumulative deposit amount per region
+        - Cumulative distinct customers per region
+        - Cumulative nominal contract value per region
+        - Distinct dukas count per region
+        - Distinct sales territories per region
+        - Distinct areas per region
+    """
+    # Sort by contract start date to calculate cumulative metrics
+    df = df.sort_values('contract_start_date').copy()
+    
+    # Calculate cumulative metrics by region
+    df['cum_loans_in_region'] = df.groupby('region').cumcount() + 1
+    df['cum_deposit_amount_in_region'] = df.groupby('region')['deposit_amount'].cumsum()
+    df['cum_contract_value_in_region'] = df.groupby('region')['nominal_contract_value'].cumsum()
+    
+    # Calculate cumulative distinct customers
+    df['cum_distinct_customers_in_region'] = df.groupby('region').apply(
+        lambda x: x.groupby('client_id').ngroup() + 1
+    ).reset_index(level=0, drop=True)
+    
+    # Calculate distinct counts
+    region_stats = df.groupby('region').agg({
+        'duka_name': 'nunique',  # Changed from duka_id
+        'sales_territory_name': 'nunique',  # Changed from sales_territory
+        'area_name': 'nunique'  # Changed from area
+    }).reset_index()
+    
+    region_stats.columns = ['region', 'distinct_dukas', 'distinct_territories', 'distinct_areas']
+    
+    # Merge distinct counts back to main DataFrame
+    df = df.merge(region_stats, on='region', how='left')
+    
+    # Calculate percentile ranks for cumulative metrics
+    df['cum_loans_rank_in_region'] = df.groupby('region')['cum_loans_in_region'].rank(pct=True)
+    df['cum_value_rank_in_region'] = df.groupby('region')['cum_contract_value_in_region'].rank(pct=True)
+    df['cum_deposit_rank_in_region'] = df.groupby('region')['cum_deposit_amount_in_region'].rank(pct=True)
+    
+    return df
+
 def get_unique_dukas(df: pd.DataFrame) -> pd.DataFrame:
     """
     Extract unique duka locations with their regions.
@@ -222,5 +271,8 @@ def process_duka_locations(df: pd.DataFrame,
     
     # Add features to main dataframe
     result_df = add_location_features(df, duka_distances)
+    
+    # Add regional features
+    result_df = calculate_regional_features(result_df)
     
     return result_df, duka_distances
