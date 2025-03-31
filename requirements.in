@@ -10,7 +10,7 @@ tabulate
 
 # Machine learning and statistics
 scikit-learn
-scorecardpy
+git+https://github.com/shichenxie/scorecardpy.git
 statsmodels
 
 # Development tools

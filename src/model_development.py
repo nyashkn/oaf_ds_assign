@@ -11,7 +11,9 @@ from typing import Dict, Any, Optional, Tuple
 
 def calculate_historical_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate historical metrics using only data available before each loan's application date.
+    Calculate historical metrics using explicit filtering for each loan.
+    This ensures strict temporal integrity by only considering loans that
+    existed before the current loan's application date.
     
     Args:
         df: Preprocessed loan data
@@ -24,28 +26,43 @@ def calculate_historical_metrics(df: pd.DataFrame) -> pd.DataFrame:
     
     # Calculate historical metrics for each level
     for level in ['region', 'sales_territory', 'area']:
-        # For each loan, calculate metrics using only previous loans
-        df[f'historical_cum_loans_{level}'] = df.groupby(level).cumcount()
+        # Explicitly count previous loans for each row
+        df[f'historical_cum_loans_{level}'] = df.apply(
+            lambda row: df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ].shape[0], 
+            axis=1
+        )
         
-        # Create temporary series for calculations
-        temp_deposits = df.groupby(level)['deposit_amount'].cumsum()
-        temp_value = df.groupby(level)['nominal_contract_value'].cumsum()
+        # Explicitly sum deposits for previous loans
+        df[f'historical_cum_deposit_{level}'] = df.apply(
+            lambda row: df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ]['deposit_amount'].sum(), 
+            axis=1
+        )
         
-        # Shift to get values before current loan
-        df[f'historical_cum_deposit_{level}'] = temp_deposits.shift(1).fillna(0)
-        df[f'historical_cum_value_{level}'] = temp_value.shift(1).fillna(0)
+        # Explicitly sum contract values for previous loans
+        df[f'historical_cum_value_{level}'] = df.apply(
+            lambda row: df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ]['nominal_contract_value'].sum(), 
+            axis=1
+        )
         
         # Count distinct customers before current loan
-        df[f'historical_cum_customers_{level}'] = (
-            df.groupby(level)
-            .apply(lambda x: x.assign(
-                count=x.groupby('client_id').cumcount().shift(1).fillna(-1)
-            ).apply(lambda row: len(x[
-                (x['contract_start_date'] < row['contract_start_date']) & 
-                (x['client_id'] != row['client_id'])
-            ]['client_id'].unique()), axis=1))
-            .reset_index(level=0, drop=True)
+        df[f'historical_cum_customers_{level}'] = df.apply(
+            lambda row: df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ]['client_id'].nunique(), 
+            axis=1
         )
+    
+    return df
 
 def calculate_relative_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -62,25 +79,57 @@ def calculate_relative_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate deposit ratio (available at application time)
     df['deposit_ratio'] = df['deposit_amount'] / df['nominal_contract_value']
     
-    # Calculate relative position metrics for each level using only previous loans
+    # Calculate relative position metrics for each level
     for level in ['region', 'sales_territory', 'area']:
-        # Create temporary dataframe for historical rankings
-        temp_df = df.sort_values('contract_start_date').copy()
+        # We'll calculate the percentile rank of each loan compared to historical loans
+        # in the same level using the apply method with explicit filtering
         
-        # For each loan, rank against only previous loans
-        df[f'deposit_ratio_rank_{level}'] = temp_df.groupby(level).apply(
-            lambda x: x['deposit_ratio'].expanding().rank(pct=True)
-        ).reset_index(level=0, drop=True)
+        # Deposit ratio rank
+        df[f'deposit_ratio_rank_{level}'] = df.apply(
+            lambda row: len(df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date']) &
+                (df['deposit_ratio'] < row['deposit_ratio'])
+            ]) / max(1, df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ].shape[0]),
+            axis=1
+        )
         
-        df[f'contract_value_rank_{level}'] = temp_df.groupby(level).apply(
-            lambda x: x['nominal_contract_value'].expanding().rank(pct=True)
-        ).reset_index(level=0, drop=True)
+        # Contract value rank
+        df[f'contract_value_rank_{level}'] = df.apply(
+            lambda row: len(df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date']) &
+                (df['nominal_contract_value'] < row['nominal_contract_value'])
+            ]) / max(1, df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ].shape[0]),
+            axis=1
+        )
         
-        # Historical metrics ranks
+        # For each historical metric, calculate rank against other loans in the same level
         for metric in ['loans', 'value', 'deposit']:
-            df[f'historical_{metric}_rank_{level}'] = temp_df.groupby(level).apply(
-                lambda x: x[f'historical_cum_{metric}_{level}'].expanding().rank(pct=True)
-            ).reset_index(level=0, drop=True)
+            metric_col = f'historical_cum_{metric}_{level}'
+            
+            # Skip if the column doesn't exist yet
+            if metric_col not in df.columns:
+                continue
+                
+            # Calculate percentile rank
+            df[f'historical_{metric}_rank_{level}'] = df.apply(
+                lambda row: len(df[
+                    (df[level] == row[level]) & 
+                    (df['contract_start_date'] < row['contract_start_date']) &
+                    (df[metric_col] < row[metric_col])
+                ]) / max(1, df[
+                    (df[level] == row[level]) & 
+                    (df['contract_start_date'] < row['contract_start_date'])
+                ].shape[0]),
+                axis=1
+            )
     
     return df
 
@@ -98,25 +147,22 @@ def calculate_infrastructure_metrics(df: pd.DataFrame) -> pd.DataFrame:
     
     # Calculate distinct counts for each level using only previous data
     for level in ['region', 'sales_territory', 'area']:
-        # For each loan, count distinct entities up to its date
-        df[f'distinct_dukas_{level}'] = (
-            df.groupby(level)
-            .apply(lambda x: x.assign(
-                count=x.groupby('duka_name').cumcount()
-            ).apply(lambda row: len(x[
-                x['contract_start_date'] < row['contract_start_date']
-            ]['duka_name'].unique()), axis=1))
-            .reset_index(level=0, drop=True)
+        # Count distinct dukas before each loan
+        df[f'distinct_dukas_{level}'] = df.apply(
+            lambda row: df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ]['duka_name'].nunique(),
+            axis=1
         )
         
-        df[f'distinct_customers_{level}'] = (
-            df.groupby(level)
-            .apply(lambda x: x.assign(
-                count=x.groupby('client_id').cumcount()
-            ).apply(lambda row: len(x[
-                x['contract_start_date'] < row['contract_start_date']
-            ]['client_id'].unique()), axis=1))
-            .reset_index(level=0, drop=True)
+        # Count distinct customers before each loan
+        df[f'distinct_customers_{level}'] = df.apply(
+            lambda row: df[
+                (df[level] == row[level]) & 
+                (df['contract_start_date'] < row['contract_start_date'])
+            ]['client_id'].nunique(),
+            axis=1
         )
     
     return df
