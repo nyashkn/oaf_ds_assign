@@ -9,6 +9,9 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 
+# Constants
+KES_TO_USD = 1/130  # Conversion rate: 130 KES = 1 USD
+
 def load_data(filepath: str) -> pd.DataFrame:
     """
     Load raw data from CSV file.
@@ -59,6 +62,39 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     df['contract_day_name'] = df['contract_start_date'].dt.day_name()
     
     return df
+
+def get_summary_statistics(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Calculate key summary statistics from the loan data.
+    
+    Args:
+        df: Preprocessed loan data
+        
+    Returns:
+        Dictionary of summary statistics
+    """
+    # Calculate portfolio totals
+    total_portfolio_kes = df['nominal_contract_value'].sum()
+    total_portfolio_usd = total_portfolio_kes * KES_TO_USD
+    
+    stats = {
+        'loan_count': len(df),
+        'total_portfolio_kes': total_portfolio_kes,
+        'total_portfolio_usd': total_portfolio_usd,
+        'avg_loan_value': df['nominal_contract_value'].mean(),
+        'median_loan_value': df['nominal_contract_value'].median(),
+        'avg_loan_value_usd': df['nominal_contract_value'].mean() * KES_TO_USD,
+        'median_loan_value_usd': df['nominal_contract_value'].median() * KES_TO_USD,
+        'avg_repayment_rate': df['nov_23_repayment_rate'].mean(),
+        'median_repayment_rate': df['nov_23_repayment_rate'].median(),
+        'avg_deposit_ratio': df['deposit_ratio'].mean(),
+        'median_deposit_ratio': df['deposit_ratio'].median(),
+        'target_achievement_rate': (df['nov_23_repayment_rate'] >= 0.98).mean(),
+        'loan_type_counts': df['Loan_Type'].value_counts().to_dict(),
+        'region_counts': df['region'].value_counts().to_dict()
+    }
+    
+    return stats
 
 def analyze_repayment_curves(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[int, float], Dict[str, float]]:
     """
