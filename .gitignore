@@ -5,3 +5,4 @@ src/__pycache__
 docs/dev_docs
 src/quatro_temp
 src/viz/__pycache__/*
+src/scorecard/__pycache__/*
