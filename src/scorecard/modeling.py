@@ -282,10 +282,13 @@ def evaluate_model_performance(
             test_perf['pic'].savefig(test_plot_path)
             plt.close(test_perf['pic'])
         
-        if 'pic' in psi_result:
+        if 'pic' in psi_result and psi_result['pic'] and len(psi_result['pic'].values()) > 0:
             psi_plot_path = os.path.join(output_dir, "psi_plot.png")
-            list(psi_result['pic'].values())[0].savefig(psi_plot_path)
-            plt.close(list(psi_result['pic'].values())[0])
+            try:
+                list(psi_result['pic'].values())[0].savefig(psi_plot_path)
+                plt.close(list(psi_result['pic'].values())[0])
+            except (IndexError, AttributeError) as e:
+                print(f"Warning: Could not save PSI plot - {str(e)}")
         
         print(f"\nPerformance metrics saved to {metrics_path}")
         print("Performance plots saved to output directory")

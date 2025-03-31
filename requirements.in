@@ -10,6 +10,7 @@ seaborn
 plotly
 tabulate
 squarify
+ReportLab
 
 # Machine learning and statistics
 scikit-learn

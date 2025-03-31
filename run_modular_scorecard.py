@@ -27,6 +27,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import necessary functions from the scorecard modules
 from src.scorecard.utils import create_version_path
+from src.scorecard.report_utils import (
+    initialize_modeling_report, add_data_inspection_section,
+    add_target_preparation_section, add_variable_selection_section,
+    add_woe_binning_section, add_model_development_section,
+    add_performance_evaluation_section
+)
 from src.scorecard.data_inspection import inspect_data, handle_date_like_columns
 from src.scorecard.target_preparation import create_binary_target, find_optimal_cutoff
 from src.scorecard.variable_selection import exclude_leakage_variables, partition_data, select_variables
@@ -52,34 +58,15 @@ def run_modular_scorecard(
 ):
     """
     Run the full modular scorecard modeling workflow.
-    
-    Args:
-        features_path: Path to features CSV file
-        target_var: Name of target variable
-        output_base_path: Base path for output files
-        cutoff: Cutoff for good/bad classification (if None, determined automatically)
-        sample_size: Optional sample size for testing
-        exclude_vars: Additional variables to exclude from modeling
-        handle_date_columns: How to handle date-like columns 
-        iv_threshold: Minimum IV for variable selection
-        handle_missing: How to handle missing values
-        region_col: Column name containing region information
-        save_plots: Whether to save WOE plots
-        classifier_type: Type of classifier to use
-        classifier_params: Additional parameters for classifier
-        handle_missing_classifier: Whether to handle missing values in classifier
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Dictionary with paths to all outputs
     """
     print(f"[INFO] Starting modular scorecard modeling workflow...")
     print(f"Target variable: {target_var}")
     print(f"Features path: {features_path}")
     print(f"Using classifier: {classifier_type}")
     
-    # Create version directory
+    # Create version directory and initialize report
     version_path = create_version_path(output_base_path)
+    report = initialize_modeling_report(version_path)
     
     # Step 1: Load and inspect data
     print(f"\n[STEP 1] Loading and inspecting data...")
@@ -92,6 +79,7 @@ def run_modular_scorecard(
     # Inspect data
     inspection_path = os.path.join(version_path, "1_data_inspection.json")
     inspection_results = inspect_data(df, target_var, inspection_path)
+    add_data_inspection_section(report, inspection_results)
     
     # Step 2: Handle date-like columns
     print(f"\n[STEP 2] Handling date-like columns...")
@@ -128,6 +116,17 @@ def run_modular_scorecard(
         output_path=binary_target_path
     )
     
+    # Add target preparation to report
+    binary_target_stats = {
+        'distribution': {
+            'good_count': len(df_with_target[df_with_target['good_loan'] == 1]),
+            'bad_count': len(df_with_target[df_with_target['good_loan'] == 0]),
+            'good_pct': len(df_with_target[df_with_target['good_loan'] == 1]) / len(df_with_target),
+            'bad_pct': len(df_with_target[df_with_target['good_loan'] == 0]) / len(df_with_target)
+        }
+    }
+    add_target_preparation_section(report, {'optimal_cutoff': cutoff}, binary_target_stats)
+    
     # Step 4: Exclude leakage variables
     print(f"\n[STEP 4] Excluding leakage variables...")
     filtered_path = os.path.join(version_path, "4_filtered_data.csv")
@@ -158,6 +157,9 @@ def run_modular_scorecard(
         iv_threshold=iv_threshold,
         output_dir=selection_dir
     )
+    # Add variable selection to report
+    selection_results['output_dir'] = selection_dir
+    add_variable_selection_section(report, selection_results)
     
     # Adjust test set to have the same variables as selected_df
     selected_vars = [col for col in selected_df.columns if col != 'good_loan']
@@ -176,6 +178,16 @@ def run_modular_scorecard(
             region_col=region_col,
             save_plots=save_plots
         )
+        
+        # Add WOE binning to report
+        binning_summary = {
+            'bin_stats': {var: {'n_bins': len(bin_info), 'iv': bin_info['bin_iv'].sum()} 
+                         for var, bin_info in bins.items()}
+        }
+        
+        # Pass the directory containing WOE plot images instead of figure objects
+        woe_plots_dir = os.path.join(binning_dir, "woe_plots") if save_plots else None
+        add_woe_binning_section(report, binning_summary, woe_plots_dir)
         
         # Step 8: WOE transformation
         print(f"\n[STEP 8] Applying WOE transformation...")
@@ -203,6 +215,15 @@ def run_modular_scorecard(
             random_state=random_state
         )
         
+        # Add model development to report
+        model_results = {
+            'classifier_type': classifier_type,
+            'handle_missing': handle_missing_classifier,
+            'classifier_params': classifier_params,
+            'coefficients': dict(zip(selected_vars, scorecard_results['coefficients']['coefficient']))
+        }
+        add_model_development_section(report, model_results)
+        
         # Step 10: Evaluate model performance
         print(f"\n[STEP 10] Evaluating model performance...")
         evaluation_dir = os.path.join(version_path, "10_performance_evaluation")
@@ -213,6 +234,25 @@ def run_modular_scorecard(
             scorecard_results['predictions']['test'],
             output_dir=evaluation_dir
         )
+        
+        # Add performance evaluation to report
+        perf_results = {
+            'train_metrics': {
+                'KS': float(performance_results['train_perf']['KS']),
+                'AUC': float(performance_results['train_perf']['AUC']),
+                'Gini': float(performance_results['train_perf']['Gini'])
+            },
+            'test_metrics': {
+                'KS': float(performance_results['test_perf']['KS']),
+                'AUC': float(performance_results['test_perf']['AUC']),
+                'Gini': float(performance_results['test_perf']['Gini'])
+            },
+            'psi': float(performance_results['psi']['psi']['PSI'].values[0])
+        }
+        add_performance_evaluation_section(report, perf_results)
+        
+        # Save report
+        report.save()
         
         # Create summary report
         summary = {
@@ -228,13 +268,7 @@ def run_modular_scorecard(
                 'params': classifier_params,
                 'handle_missing': handle_missing_classifier
             },
-            'performance': {
-                'train_ks': float(performance_results['train_perf']['KS']),
-                'test_ks': float(performance_results['test_perf']['KS']),
-                'train_auc': float(performance_results['train_perf']['AUC']),
-                'test_auc': float(performance_results['test_perf']['AUC']),
-                'psi': float(performance_results['psi']['psi']['PSI'].values[0])
-            }
+            'performance': perf_results
         }
         
         summary_path = os.path.join(version_path, "summary.json")
@@ -244,6 +278,7 @@ def run_modular_scorecard(
         print(f"\n[SUCCESS] Scorecard modeling complete!")
         print(f"Results saved to {version_path}")
         print(f"Summary report saved to {summary_path}")
+        print(f"PDF report saved to {os.path.join(version_path, 'modeling_report.pdf')}")
         
         # Return paths to outputs
         return {
@@ -257,7 +292,8 @@ def run_modular_scorecard(
             'woe_binning': binning_dir,
             'woe_transformation': transformation_dir,
             'scorecard': scorecard_dir,
-            'performance_evaluation': evaluation_dir
+            'performance_evaluation': evaluation_dir,
+            'modeling_report': os.path.join(version_path, 'modeling_report.pdf')
         }
         
     except Exception as e:
@@ -357,15 +393,16 @@ def main():
         print("\n=== Scorecard Modeling Results ===")
         print(f"Version path: {result['version_path']}")
         print(f"Summary file: {result['version_path']}/summary.json")
+        print(f"PDF report: {result['modeling_report']}")
         
         # Print performance metrics
         if 'summary' in result and 'performance' in result['summary']:
             perf = result['summary']['performance']
             print("\nModel Performance:")
-            print(f"  Train KS: {perf['train_ks']:.4f}")
-            print(f"  Test KS: {perf['test_ks']:.4f}")
-            print(f"  Train AUC: {perf['train_auc']:.4f}")
-            print(f"  Test AUC: {perf['test_auc']:.4f}")
+            print(f"  Train KS: {perf['train_metrics']['KS']:.4f}")
+            print(f"  Test KS: {perf['test_metrics']['KS']:.4f}")
+            print(f"  Train AUC: {perf['train_metrics']['AUC']:.4f}")
+            print(f"  Test AUC: {perf['test_metrics']['AUC']:.4f}")
             print(f"  PSI: {perf['psi']:.4f}")
         
         return 0
