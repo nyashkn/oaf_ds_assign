@@ -1,4 +1,4 @@
-## Day of the week affects cure-rate. Why is Sunday having an effect in the cure-rate?
+## Day of the week affects cure-rate. Why is Sunday having an effect in the cure-rate? [Add to report]
 Day of the week when someone took the facility affects the cure-rates. Sunday has a below than average cure-rate. So someone taking a loan on a Sunday, affects the cure-rate. Why is Sunday having a lower-level of importance?
 
 1. Selection Bias in Sunday Borrowers
@@ -30,7 +30,7 @@ Compare operational metrics like time-to-decision or documentation completeness 
 Examine whether the effect persists after controlling for loan officer identity
 Analyze whether Sunday borrowers receive the same frequency and quality of follow-up
 
-## Feature Engineering and Data Leakage Considerations
+## Feature Engineering and Data Leakage Considerations [Add to Notebook]
 
 ### Available Variables and Their Timing
 
