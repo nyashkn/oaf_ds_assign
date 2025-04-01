@@ -17,6 +17,23 @@ scikit-learn
 git+https://github.com/shichenxie/scorecardpy.git
 statsmodels
 
+# Model explanation
+shap
+pdpbox
+eli5
+lime
+
+numba>=0.56.0
+llvmlite>=0.39.0
+# Additional ML algorithms
+xgboost
+lightgbm
+catboost
+
+# Visualization dependencies
+graphviz
+pycebox
+
 # Development tools
 jupyter
 quarto

@@ -6,3 +6,5 @@ docs/dev_docs
 src/quatro_temp
 src/viz/__pycache__/*
 src/scorecard/__pycache__/*
+src/scorecard_regression/__pycache__/*
+src/scorecard_regression/profitability/__pycache__/*
