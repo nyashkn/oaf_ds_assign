@@ -32,14 +32,21 @@ from src import analysis
 from src import geo_features
 import src.model_development_polars as mdp
 
-def main(sample_size=None, full=False):
+def main(sample_size=None, full=False, holdout=False):
     """Main function to generate scorecard features"""
     print("One Acre Fund: Loan Performance Feature Generation")
     print("-" * 70)
     
     # Load and preprocess data
     print("\n1. Loading and preprocessing data...")
-    raw_data = analysis.load_data("data/raw/training_loan_processed.csv")
+    if holdout:
+        file_path = "data/raw/holdout_loan_processed.csv"
+        print("   Processing HOLDOUT dataset")
+    else:
+        file_path = "data/raw/training_loan_processed.csv"
+        print("   Processing TRAINING dataset")
+        
+    raw_data = analysis.load_data(file_path)
     df = analysis.preprocess_data(raw_data)
     print(f"   Loaded {len(df)} loans")
     
@@ -127,7 +134,10 @@ def main(sample_size=None, full=False):
             print(f"     - ... and {len(columns) - 5} more")
     
     # Save dataset
-    if full:
+    if holdout:
+        output_path = "data/processed/holdout_all_features.csv"
+        print("   Saving HOLDOUT features")
+    elif full:
         output_path = "data/processed/all_features.csv"
     else:
         output_path = "data/processed/feature_sample.csv"
@@ -240,6 +250,7 @@ if __name__ == "__main__":
     parser.add_argument('--sample', type=int, help='Sample size to process')
     parser.add_argument('--geocode', action='store_true', help='Run geocoding process')
     parser.add_argument('--force-refresh', action='store_true', help='Force refresh geocoding cache')
+    parser.add_argument('--holdout', action='store_true', help='Process holdout dataset instead of training')
     args = parser.parse_args()
 
     # Check if geocoding is requested
@@ -247,4 +258,4 @@ if __name__ == "__main__":
         geocode_dukas(force_refresh=args.force_refresh)
     else:
         # Run feature generation
-        main(sample_size=args.sample, full=args.full)
+        main(sample_size=args.sample, full=args.full, holdout=args.holdout)

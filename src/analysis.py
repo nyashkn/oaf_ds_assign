@@ -43,7 +43,17 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate derived metrics
     df['sept_23_repayment_rate'] = df['cumulative_amount_paid_start'] / df['nominal_contract_value']
     df['deposit_ratio'] = df['deposit_amount'] / df['nominal_contract_value']
-    df['nov_23_repayment_rate'] = df['cumulative_amount_paid'] / df['nominal_contract_value'] 
+    
+    # Check if cumulative_amount_paid exists (it's missing in holdout dataset)
+    if 'cumulative_amount_paid' in df.columns:
+        df['nov_23_repayment_rate'] = df['cumulative_amount_paid'] / df['nominal_contract_value']
+    else:
+        print("   Note: 'cumulative_amount_paid' column not found. This appears to be the holdout dataset.")
+        print("   Using cumulative_amount_paid_start for calculations instead.")
+        # For holdout, we don't have nov_23 data, so set it the same as sept_23 for now
+        df['nov_23_repayment_rate'] = df['sept_23_repayment_rate']
+        # Add a dummy cumulative_amount_paid column for compatibility
+        df['cumulative_amount_paid'] = df['cumulative_amount_paid_start']
     
     # Calculate time-based features
     df['month'] = df['contract_start_date'].dt.to_period('M')

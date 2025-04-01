@@ -1,3 +1,48 @@
+# Feature Categories Overview
+
+| Category | Feature Name | Description |
+|----------|-------------|-------------|
+| Basic Metrics | deposit_ratio | Deposit amount / Contract value |
+| | cumulative_amount_paid | Total amount paid to date |
+| | nominal_contract_value | Original contract amount |
+| | Loan_Type | Type of loan (e.g., Group Loan) |
+| Performance | sept_23_repayment_rate | Repayment rate as of Sept 2023 |
+| | nov_23_repayment_rate | Repayment rate as of Nov 2023 |
+| | diff_nov_23_to_sept_23_repayment_rate | Change in repayment rate |
+| | cumulative_amount_paid_start | Initial cumulative amount paid |
+| Geographic | region | Geographic region |
+| | area | Sub-region area |
+| | sales_territory | Sales territory |
+| | distance_to_centroid | Distance to regional center |
+| | distance_to_nairobi | Distance to Nairobi |
+| | distance_to_mombasa | Distance to Mombasa |
+| | distance_to_kisumu | Distance to Kisumu |
+| | coords_imputed | Whether coordinates were imputed |
+| Historical* | historical_cum_deposit | Total deposits in area |
+| | historical_cum_loans | Total loans in area |
+| | historical_cum_value | Total value in area |
+| | historical_cum_customers | Unique customers in area |
+| Relative Position* | deposit_ratio_rank | Deposit ratio percentile |
+| | contract_value_rank | Contract value percentile |
+| | historical_loans_rank | Loan count percentile |
+| | historical_value_rank | Value percentile |
+| | historical_deposit_rank | Deposit percentile |
+| Infrastructure* | distinct_dukas | Unique retail points |
+| | distinct_customers | Unique customers |
+| Temporal | contract_start_day | Day of month (1-31) |
+| | contract_day_name | Day name (Monday-Sunday) |
+| | contract_month | Month number (1-12) |
+| | contract_quarter | Quarter number (1-4) |
+| | is_weekend | Weekend flag (0/1) |
+| | days_since_start | Days from contract start |
+| | months_since_start | Months from contract start |
+| | days_diff_contract_start_to_sept_23 | Days to Sept 2023 |
+| | days_diff_contract_start_to_nov_23 | Days to Nov 2023 |
+| | month_diff_contract_start_to_sept_23 | Months to Sept 2023 |
+| | month_diff_contract_start_to_nov_23 | Months to Nov 2023 |
+
+\* Features marked with (*) are computed at three geographic levels: region, area, and sales_territory
+
 # Feature Descriptions and Computations
 
 - deposit_ratio - Ratio of deposit amount to nominal contract value.
@@ -82,42 +127,6 @@ distinct_dukas = historical_loans.select(pl.col("duka_name").n_unique()).item()
 **Computation:**
 ```python
 distinct_customers = historical_loans.select(pl.col("client_id").n_unique()).item()
-```
-
-- distance_to_centroid - Distance to regional center in kilometers.
-
-**Computation:**
-```python
-# Computed using geospatial coordinates and distance formula
-# Specific implementation depends on coordinate system used
-```
-
-- distance_to_nairobi - Distance to Nairobi in kilometers.
-
-**Computation:**
-```python
-# Computed using geospatial coordinates and distance formula
-```
-
-- distance_to_mombasa - Distance to Mombasa in kilometers.
-
-**Computation:**
-```python
-# Computed using geospatial coordinates and distance formula
-```
-
-- distance_to_kisumu - Distance to Kisumu in kilometers.
-
-**Computation:**
-```python
-# Computed using geospatial coordinates and distance formula
-```
-
-- coords_imputed - Boolean flag indicating whether coordinates were imputed.
-
-**Computation:**
-```python
-# True if coordinates were imputed, False otherwise
 ```
 
 - contract_start_day - Day of month when contract started.
