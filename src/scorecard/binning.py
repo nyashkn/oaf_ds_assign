@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import matplotlib.pyplot as plt
 
 from .constants import DATE_PATTERNS
+from .plotting import create_woe_plot, create_woe_plots_grid
 
 def perform_woe_binning(
     df: pd.DataFrame,
@@ -124,18 +125,15 @@ def perform_woe_binning(
             with open(summary_path, 'w') as f:
                 json.dump(summary, f, indent=2)
             
-            # Save WOE plots if requested
+            # Save WOE plots if requested using our enhanced Seaborn plots
             if save_plots:
                 plots_dir = os.path.join(output_dir, "woe_plots")
                 os.makedirs(plots_dir, exist_ok=True)
                 
-                for var in bins.keys():
-                    plt.figure(figsize=(10, 6))
-                    sc.woebin_plot(bins[var])
-                    plt.title(f"WOE Binning Plot - {var}")
-                    plt.tight_layout()
-                    plt.savefig(os.path.join(plots_dir, f"{var}_woe_plot.png"))
-                    plt.close()
+                # Generate plots for all variables
+                plot_paths = create_woe_plots_grid(bins, plots_dir)
+                
+                print(f"Generated {len(plot_paths)} enhanced WOE plots with Seaborn")
             
             print(f"\nWOE bins saved to {bins_path}")
             print(f"Binning summary saved to {summary_path}")
