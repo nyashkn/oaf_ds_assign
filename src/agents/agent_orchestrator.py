@@ -26,7 +26,7 @@ load_dotenv()
 # Optional debug mode
 import litellm
 # Uncomment to enable debug mode
-litellm._turn_on_debug()
+# litellm._turn_on_debug()
 
 def create_agent(model_id: str, task_type: str) -> CodeAgent:
     """
@@ -78,6 +78,7 @@ def run_pdf_analysis_task(
     model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0",
     pdf_path: str = "data/processed/scorecard_modelling/v22/modeling_report.pdf",
     output_dir: str = "docs/final",
+    debug: bool = False,
 ) -> str:
     """
     Run the PDF analysis task to extract insights
@@ -86,10 +87,17 @@ def run_pdf_analysis_task(
         model_id: The LLM model ID to use
         pdf_path: Path to the PDF file to analyze
         output_dir: Directory where output should be saved
+        debug: Whether to enable debug mode
         
     Returns:
         Path to the output file
     """
+    # Enable debug mode if requested
+    if debug:
+        import litellm
+        litellm._turn_on_debug()
+        print(f"Debug mode enabled for LiteLLM")
+    
     # Generate timestamp for the output file
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = f"{output_dir}/02_agent_insights_{timestamp}.md"
@@ -97,12 +105,24 @@ def run_pdf_analysis_task(
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
+    # Log the starting parameters
+    print(f"Starting PDF analysis task:")
+    print(f"- Model: {model_id}")
+    print(f"- PDF Path: {pdf_path}")
+    print(f"- Output Path: {output_path}")
+    
     # Get the task prompt
     task = get_pdf_analysis_prompt(output_path=output_path)
     
     # Create and run the agent
     agent = create_agent(model_id, task_type="pdf_analysis")
+    
+    print(f"Agent created with {len(agent.tools)} tools")
+    print(f"Running agent with max_steps={agent.max_steps}")
+    
     result = agent.run(task=task, reset=False)
+    
+    print(f"Agent task completed")
     
     return result
 
@@ -138,18 +158,19 @@ def run_feature_engineering_task(
     
     return result
 
-def main(task_type: str = "pdf_analysis") -> str:
+def main(task_type: str = "pdf_analysis", debug: bool = False) -> str:
     """
     Main function to run the appropriate agent task
     
     Args:
         task_type: Type of task to run (pdf_analysis or feature_engineering)
+        debug: Whether to enable debug mode
         
     Returns:
         Result from the agent run
     """
     if task_type == "pdf_analysis":
-        return run_pdf_analysis_task()
+        return run_pdf_analysis_task(debug=debug)
     elif task_type == "feature_engineering":
         return run_feature_engineering_task()
     else:
@@ -166,8 +187,19 @@ if __name__ == "__main__":
         choices=["pdf_analysis", "feature_engineering"],
         help="Type of task to run"
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode for LiteLLM"
+    )
+    parser.add_argument(
+        "--pdf",
+        type=str,
+        default="data/processed/scorecard_modelling/v22/modeling_report.pdf",
+        help="Path to the PDF file (for pdf_analysis task)"
+    )
     
     args = parser.parse_args()
     
-    result = main(task_type=args.task)
+    result = main(task_type=args.task, debug=args.debug)
     print(result)

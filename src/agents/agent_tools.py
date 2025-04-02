@@ -13,18 +13,20 @@ class PDFProcessor:
     """
     A class to handle PDF processing with batched image loading
     """
-    def __init__(self, max_batch_size: int = 15):
+    def __init__(self, max_batch_size: int = 10):
         """
         Initialize the PDF processor
         
         Args:
-            max_batch_size: Maximum number of pages to process in a batch
+            max_batch_size: Maximum number of pages to process in a batch (default: 10)
+                            Reduced from 15 to avoid hitting Claude's 20-image limit
         """
         self.max_batch_size = max_batch_size
         self.current_pdf_path = None
         self.doc = None
         self.total_pages = 0
         self.current_batch_start = 0
+        self.current_batch_images = []  # Store the current batch of images
     
     def open_pdf(self, pdf_path: str) -> str:
         """
@@ -118,7 +120,23 @@ def get_next_pdf_batch() -> Dict[str, Any]:
     # Store them temporarily in the processor
     pdf_processor.current_batch_images = images
     
-    return batch_info
+    if not images:
+        if "error" in batch_info:
+            return {"status": "error", "message": batch_info["error"]}
+        else:
+            return {"status": "complete", "message": "End of PDF reached"}
+    
+    # Add more detailed information to the batch info
+    detailed_info = {
+        "status": "success",
+        "message": f"Retrieved pages {batch_info['batch_start_page']} to {batch_info['batch_end_page']} of {batch_info['total_pages']}",
+        "current_batch_pages": list(range(batch_info['batch_start_page'], batch_info['batch_end_page'] + 1)),
+        "images_count": len(images),
+        "is_last_batch": batch_info["is_last_batch"],
+        **batch_info
+    }
+    
+    return detailed_info
 
 @tool
 def read_file(file_path: str) -> str:
@@ -178,11 +196,24 @@ def list_directory(directory_path: str) -> List[str]:
 def add_pdf_images_callback(step_log: ActionStep, agent: CodeAgent) -> None:
     """
     Callback to add PDF images to the agent's observations after certain actions.
+    Also cleans up older images to prevent memory overflow.
     
     Args:
         step_log: The current step log
         agent: The agent instance
     """
+    current_step = step_log.step_number
+    
+    # First, clean up older images to prevent the "too many images" error
+    # Keep only the most recent batch of images and remove all others
+    for previous_step in agent.memory.steps:
+        if (isinstance(previous_step, ActionStep) and 
+            previous_step.step_number < current_step - 1 and  # Keep only the most recent step with images
+            hasattr(previous_step, 'observations_images') and 
+            previous_step.observations_images is not None):
+            # Remove images from older steps, but keep the text observations
+            previous_step.observations_images = None
+            
     # Check if we have images from a get_next_pdf_batch tool call
     if hasattr(pdf_processor, 'current_batch_images') and pdf_processor.current_batch_images:
         images = pdf_processor.current_batch_images
@@ -191,6 +222,9 @@ def add_pdf_images_callback(step_log: ActionStep, agent: CodeAgent) -> None:
             # Add text to observations about the images
             image_info = f"\nAdded {len(images)} PDF page images to observations (pages {pdf_processor.current_batch_start - len(images) + 1}-{pdf_processor.current_batch_start})"
             step_log.observations = (step_log.observations or "") + image_info
+            
+            # Log the image addition for debugging
+            print(f"Added {len(images)} images to step {current_step} (pages {pdf_processor.current_batch_start - len(images) + 1}-{pdf_processor.current_batch_start})")
             
             # Clear the images to avoid duplicating them in future steps
             pdf_processor.current_batch_images = []

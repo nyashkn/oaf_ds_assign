@@ -11,3 +11,4 @@ src/scorecard_regression/profitability/__pycache__/*
 src/scorecard_regression/reporting/styles/__pycache__/*
 src/scorecard_regression/reporting/__pycache__/*
 src/agents/__pycache__/*
+src/features/__pycache__/*
