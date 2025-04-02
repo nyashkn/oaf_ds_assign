@@ -1,302 +1,320 @@
 """
-Threshold analysis functions for profitability analysis.
+Threshold analysis functions for loan repayment rate prediction.
 
-This module provides functions to analyze profitability metrics for different
-repayment rate thresholds, including single and multiple threshold analyses.
+This module provides functions to analyze the impact of different threshold values
+when converting continuous repayment rate predictions into binary loan approval decisions.
 """
 
-import pandas as pd
-import numpy as np
 import os
-import json
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from typing import Dict, List, Optional, Tuple, Any, Union
 
 from .metrics import (
-    calculate_loan_metrics,
     calculate_profit_metrics,
     calculate_classification_metrics,
+    calculate_loan_metrics,
     calculate_business_metrics
 )
 
+from ..constants import DEFAULT_BUSINESS_PARAMS
+
+
 def analyze_threshold(
-    df: pd.DataFrame,
-    threshold: float,
-    predicted_col: str = 'predicted',
-    actual_col: str = 'actual',
-    loan_amount_col: str = 'nominal_contract_value',
-    gross_margin: float = 0.3
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    loan_values: np.ndarray,
+    threshold: float = 0.8,
+    margin: float = DEFAULT_BUSINESS_PARAMS['gross_margin'],
+    default_loss_rate: float = DEFAULT_BUSINESS_PARAMS['default_loss_rate'],
+    output_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Comprehensively analyze a single threshold.
+    Analyze the impact of a specific threshold on loan approval metrics.
     
     Args:
-        df: DataFrame with actual and predicted repayment rates
-        threshold: Repayment rate threshold for classification
-        predicted_col: Column name for predicted repayment rates
-        actual_col: Column name for actual repayment rates
-        loan_amount_col: Column name for loan amounts
-        gross_margin: Gross margin percentage
+        y_true: True repayment rates
+        y_pred: Predicted repayment rates
+        loan_values: Loan amounts
+        threshold: Threshold for loan approval
+        margin: Gross margin as a decimal (e.g., 0.16 = 16%)
+        default_loss_rate: Loss rate on defaulted loans (1.0 = 100%)
+        output_path: Path to save analysis results
         
     Returns:
-        Dictionary with comprehensive threshold analysis results
+        Dictionary with threshold analysis results
     """
-    # Calculate loan metrics
-    loan_metrics = calculate_loan_metrics(
-        df, threshold, predicted_col, actual_col, loan_amount_col
+    # Calculate comprehensive business metrics
+    metrics = calculate_business_metrics(
+        y_true, y_pred, loan_values, threshold, margin, default_loss_rate
     )
     
-    # Calculate profit metrics
-    profit_metrics = calculate_profit_metrics(
-        df, threshold, loan_metrics, predicted_col, actual_col, loan_amount_col, gross_margin
-    )
+    # Extract key metrics for easier access
+    loan_metrics = metrics['loan_metrics']
+    profit_metrics = metrics['profit_metrics']
+    class_metrics = metrics['classification_metrics']
     
-    # Calculate classification metrics
-    class_metrics = calculate_classification_metrics(loan_metrics)
-    
-    # Calculate business metrics
-    business_metrics = calculate_business_metrics(loan_metrics, profit_metrics)
-    
-    # Combine all metrics into a comprehensive analysis
-    analysis = {
-        'threshold': threshold,
-        'loan_metrics': loan_metrics,
-        'profit_metrics': profit_metrics,
-        'classification_metrics': class_metrics,
-        'business_metrics': business_metrics
+    # Create a summary of threshold analysis
+    summary = {
+        'threshold': float(threshold),
+        'approval_rate': float(loan_metrics['n_loans']['approval_rate']),
+        'average_repayment': {
+            'predicted': float(loan_metrics['repayment_rates']['predicted_avg']),
+            'actual': float(loan_metrics['repayment_rates']['actual_avg']),
+            'difference': float(loan_metrics['repayment_rates']['difference'])
+        },
+        'profits': {
+            'expected': float(profit_metrics['expected_profit']),
+            'actual': float(profit_metrics['actual_profit']),
+            'difference': float(profit_metrics['actual_profit'] - profit_metrics['expected_profit'])
+        },
+        'roi': float(profit_metrics['roi']),
+        'classification': {
+            'accuracy': float(class_metrics['accuracy']),
+            'precision': float(class_metrics['precision']),
+            'recall': float(class_metrics['recall']),
+            'f1_score': float(class_metrics['f1_score'])
+        },
+        'loan_counts': {
+            'approved': int(loan_metrics['n_loans']['approved']),
+            'rejected': int(loan_metrics['n_loans']['rejected']),
+            'good_approved': int(loan_metrics['loan_categories']['good_approved']['count']),
+            'bad_approved': int(loan_metrics['loan_categories']['bad_approved']['count']),
+            'good_rejected': int(loan_metrics['loan_categories']['good_rejected']['count']),
+            'bad_rejected': int(loan_metrics['loan_categories']['bad_rejected']['count'])
+        },
+        'loan_values': {
+            'approved': float(loan_metrics['loan_values']['approved']),
+            'rejected': float(loan_metrics['loan_values']['rejected']),
+            'good_approved': float(loan_metrics['loan_categories']['good_approved']['value']),
+            'bad_approved': float(loan_metrics['loan_categories']['bad_approved']['value']),
+            'good_rejected': float(loan_metrics['loan_categories']['good_rejected']['value']),
+            'bad_rejected': float(loan_metrics['loan_categories']['bad_rejected']['value'])
+        },
+        'parameters': {
+            'threshold': float(threshold),
+            'margin': float(margin),
+            'default_loss_rate': float(default_loss_rate)
+        }
     }
     
-    return analysis
+    # Save results if output_path provided
+    if output_path:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Save summary as JSON
+        import json
+        with open(output_path, 'w') as f:
+            json.dump(summary, f, indent=2)
+        
+        print(f"Threshold analysis saved to {output_path}")
+    
+    return summary
+
 
 def analyze_multiple_thresholds(
-    df: pd.DataFrame,
-    thresholds: List[float],
-    predicted_col: str = 'predicted',
-    actual_col: str = 'actual',
-    loan_amount_col: str = 'nominal_contract_value',
-    gross_margin: float = 0.3,
-    output_dir: Optional[str] = None
-) -> Dict[str, Any]:
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    loan_values: np.ndarray,
+    thresholds: Optional[List[float]] = None,
+    margin: float = DEFAULT_BUSINESS_PARAMS['gross_margin'],
+    default_loss_rate: float = DEFAULT_BUSINESS_PARAMS['default_loss_rate'],
+    output_path: Optional[str] = None
+) -> pd.DataFrame:
     """
-    Analyze multiple thresholds and find the optimal one.
+    Analyze the impact of multiple thresholds on loan approval metrics.
     
     Args:
-        df: DataFrame with actual and predicted repayment rates
-        thresholds: List of repayment rate thresholds to evaluate
-        predicted_col: Column name for predicted repayment rates
-        actual_col: Column name for actual repayment rates
-        loan_amount_col: Column name for loan amounts
-        gross_margin: Gross margin percentage
-        output_dir: Directory to save analysis results
+        y_true: True repayment rates
+        y_pred: Predicted repayment rates
+        loan_values: Loan amounts
+        thresholds: List of thresholds to analyze (if None, uses a default range)
+        margin: Gross margin as a decimal (e.g., 0.16 = 16%)
+        default_loss_rate: Loss rate on defaulted loans (1.0 = 100%)
+        output_path: Path to save analysis results
         
     Returns:
-        Dictionary with threshold analyses and optimal threshold
+        DataFrame with metrics for each threshold
     """
-    print("\n=== Threshold Analysis ===")
+    # Set default thresholds if none provided
+    if thresholds is None:
+        # Create a range of thresholds from 0.5 to 0.95 with 0.05 step
+        thresholds = np.arange(0.5, 0.96, 0.05).tolist()
+    
+    # Initialize results list
+    results = []
     
     # Analyze each threshold
-    threshold_analyses = []
-    
     for threshold in thresholds:
-        analysis = analyze_threshold(
-            df, threshold, predicted_col, actual_col, loan_amount_col, gross_margin
+        # Get metrics for this threshold
+        profit_metrics = calculate_profit_metrics(
+            y_true, y_pred, loan_values, threshold, margin, default_loss_rate
         )
-        threshold_analyses.append(analysis)
-    
-    # Convert to DataFrame for easier analysis
-    threshold_data = []
-    
-    for analysis in threshold_analyses:
-        data = {
-            'threshold': analysis['threshold'],
-            'approval_rate': analysis['business_metrics']['approval_rate'],
-            'actual_repayment_rate': analysis['loan_metrics']['actual_repayment_rate'],
-            'total_actual_profit': analysis['profit_metrics']['total_actual_profit'],
-            'money_left_on_table': analysis['profit_metrics']['money_left_on_table'],
-            'accuracy': analysis['classification_metrics']['accuracy'],
-            'precision': analysis['classification_metrics']['precision'],
-            'recall': analysis['classification_metrics']['recall'],
-            'f1_score': analysis['classification_metrics']['f1_score']
+        
+        class_metrics = calculate_classification_metrics(
+            y_true, y_pred, threshold
+        )
+        
+        # Calculate average repayment rates for approved loans
+        approved_mask = y_pred >= threshold
+        
+        if np.any(approved_mask):
+            actual_avg_repayment = y_true[approved_mask].mean()
+            predicted_avg_repayment = y_pred[approved_mask].mean()
+        else:
+            actual_avg_repayment = 0.0
+            predicted_avg_repayment = 0.0
+        
+        # Combine metrics
+        result = {
+            'threshold': threshold,
+            'approval_rate': profit_metrics['approval_rate'],
+            'approved_loan_value': profit_metrics['approved_loan_value'],
+            'actual_profit': profit_metrics['actual_profit'],
+            'expected_profit': profit_metrics['expected_profit'],
+            'actual_loss': profit_metrics['actual_loss'],
+            'roi': profit_metrics['roi'],
+            'accuracy': class_metrics['accuracy'],
+            'precision': class_metrics['precision'],
+            'recall': class_metrics['recall'],
+            'f1_score': class_metrics['f1_score'],
+            'predicted_avg_repayment': predicted_avg_repayment,
+            'actual_avg_repayment': actual_avg_repayment
         }
-        threshold_data.append(data)
-    
-    threshold_df = pd.DataFrame(threshold_data)
-    
-    # Find optimal threshold based on total profit
-    if len(threshold_df) > 0:
-        optimal_idx = threshold_df['total_actual_profit'].idxmax()
-        optimal_threshold = threshold_df.loc[optimal_idx, 'threshold']
-        optimal_analysis = threshold_analyses[optimal_idx]
         
-        print(f"\nOptimal threshold based on total profit: {optimal_threshold:.2f}")
-        print(f"  Approval rate: {threshold_df.loc[optimal_idx, 'approval_rate']:.1%}")
-        print(f"  Actual repayment rate: {threshold_df.loc[optimal_idx, 'actual_repayment_rate']:.2f}")
-        print(f"  Total profit: {threshold_df.loc[optimal_idx, 'total_actual_profit']:.2f}")
-        print(f"  Money left on table: {threshold_df.loc[optimal_idx, 'money_left_on_table']:.2f}")
-    else:
-        optimal_threshold = None
-        optimal_analysis = None
-        print("\nNo optimal threshold found (empty threshold dataframe)")
+        results.append(result)
     
-    # Save results if output directory provided
-    if output_dir:
+    # Convert to DataFrame
+    metrics_df = pd.DataFrame(results)
+    
+    # Save results if output_path provided
+    if output_path:
         # Create directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # Save threshold metrics to CSV
-        threshold_path = os.path.join(output_dir, "threshold_metrics.csv")
-        threshold_df.to_csv(threshold_path, index=False)
+        # Save DataFrame as CSV
+        metrics_df.to_csv(output_path, index=False)
         
-        # Save full analyses
-        analyses_summary = {}
-        for analysis in threshold_analyses:
-            threshold = analysis['threshold']
-            analyses_summary[f"threshold_{threshold:.2f}"] = {
-                # Convert the most important metrics to simple dictionaries
-                'threshold': threshold,
-                'loan_counts': {
-                    'total_loans': analysis['loan_metrics']['total_loans'],
-                    'n_approved': analysis['loan_metrics']['n_approved'],
-                    'n_rejected': analysis['loan_metrics']['n_rejected'],
-                    'n_good': analysis['loan_metrics']['n_good'],
-                    'n_bad': analysis['loan_metrics']['n_bad'],
-                    'n_true_pos': analysis['loan_metrics']['n_true_pos'],
-                    'n_false_pos': analysis['loan_metrics']['n_false_pos'],
-                    'n_true_neg': analysis['loan_metrics']['n_true_neg'],
-                    'n_false_neg': analysis['loan_metrics']['n_false_neg']
-                },
-                'profit_metrics': {
-                    'total_actual_profit': analysis['profit_metrics']['total_actual_profit'],
-                    'money_left_on_table': analysis['profit_metrics']['money_left_on_table'],
-                    'approved_profit': analysis['profit_metrics']['approved_profit']
-                },
-                'classification_metrics': analysis['classification_metrics'],
-                'business_metrics': analysis['business_metrics']
-            }
-        
-        # Save analyses summary
-        summary_path = os.path.join(output_dir, "threshold_analyses.json")
-        with open(summary_path, 'w') as f:
-            json.dump(analyses_summary, f, indent=2)
-        
-        print(f"\nThreshold analysis saved to {output_dir}")
+        print(f"Multiple threshold analysis saved to {output_path}")
     
-    return {
-        'threshold_analyses': threshold_analyses,
-        'threshold_df': threshold_df,
-        'optimal_threshold': optimal_threshold,
-        'optimal_analysis': optimal_analysis
-    }
+    return metrics_df
+
 
 def analyze_cutoff_tradeoffs(
-    df: pd.DataFrame,
-    target_threshold: float,
-    predicted_col: str = 'predicted',
-    actual_col: str = 'actual',
-    loan_amount_col: str = 'nominal_contract_value',
-    gross_margin: float = 0.3,
-    output_dir: Optional[str] = None
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    loan_values: np.ndarray,
+    thresholds: Optional[List[float]] = None,
+    business_params: Optional[Dict[str, float]] = None,
+    output_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Analyze the tradeoff between target threshold and profitability.
+    Analyze the tradeoffs between different metrics when selecting a threshold.
     
     Args:
-        df: DataFrame with actual and predicted repayment rates
-        target_threshold: Target repayment rate threshold for comparison
-        predicted_col: Column name for predicted repayment rates
-        actual_col: Column name for actual repayment rates
-        loan_amount_col: Column name for loan amounts
-        gross_margin: Gross margin percentage
-        output_dir: Directory to save tradeoff analysis results
+        y_true: True repayment rates
+        y_pred: Predicted repayment rates
+        loan_values: Loan amounts
+        thresholds: List of thresholds to analyze (if None, uses a default range)
+        business_params: Dictionary with business parameters (margin, default_loss_rate)
+        output_path: Path to save analysis results
         
     Returns:
         Dictionary with tradeoff analysis results
     """
-    print(f"\n=== Cutoff Tradeoff Analysis (Target: {target_threshold:.2f}) ===")
+    # Set default thresholds if none provided
+    if thresholds is None:
+        # More fine-grained thresholds for detailed analysis
+        thresholds = np.arange(0.5, 0.96, 0.02).tolist()
     
-    # Perform threshold analysis
-    analysis = analyze_threshold(
-        df, target_threshold, predicted_col, actual_col, loan_amount_col, gross_margin
+    # Set default business parameters if none provided
+    if business_params is None:
+        business_params = {
+            'margin': DEFAULT_BUSINESS_PARAMS['gross_margin'],
+            'default_loss_rate': DEFAULT_BUSINESS_PARAMS['default_loss_rate']
+        }
+    
+    # Get metrics for all thresholds
+    metrics_df = analyze_multiple_thresholds(
+        y_true, y_pred, loan_values, thresholds,
+        business_params['margin'], business_params['default_loss_rate']
     )
     
-    # Extract key metrics for simplified reporting
-    loan_metrics = analysis['loan_metrics']
-    profit_metrics = analysis['profit_metrics']
-    class_metrics = analysis['classification_metrics']
-    business_metrics = analysis['business_metrics']
-    
-    # Create summary dictionary
-    tradeoff_summary = {
-        'target_threshold': target_threshold,
-        'gross_margin': gross_margin,
-        'loan_counts': {
-            'total_loans': loan_metrics['total_loans'],
-            'good_loans': loan_metrics['n_good'],
-            'bad_loans': loan_metrics['n_bad'],
-            'true_positives': loan_metrics['n_true_pos'],
-            'false_positives': loan_metrics['n_false_pos'],
-            'true_negatives': loan_metrics['n_true_neg'],
-            'false_negatives': loan_metrics['n_false_neg'],
-            'approved_loans': loan_metrics['n_approved'],
-            'rejected_loans': loan_metrics['n_rejected']
+    # Find optimal thresholds for different metrics
+    optima = {
+        'profit': {
+            'threshold': float(metrics_df.loc[metrics_df['actual_profit'].idxmax(), 'threshold']),
+            'value': float(metrics_df['actual_profit'].max()),
+            'approval_rate': float(metrics_df.loc[metrics_df['actual_profit'].idxmax(), 'approval_rate'])
         },
-        'loan_values': {
-            'total_value': loan_metrics['good_loan_value'] + loan_metrics['bad_loan_value'],
-            'good_loan_value': loan_metrics['good_loan_value'],
-            'bad_loan_value': loan_metrics['bad_loan_value'],
-            'true_positive_value': loan_metrics['true_pos_value'],
-            'false_positive_value': loan_metrics['false_pos_value'],
-            'true_negative_value': loan_metrics['true_neg_value'],
-            'false_negative_value': loan_metrics['false_neg_value'],
-            'approved_value': loan_metrics['approved_value'],
-            'rejected_value': loan_metrics['rejected_value']
+        'roi': {
+            'threshold': float(metrics_df.loc[metrics_df['roi'].idxmax(), 'threshold']),
+            'value': float(metrics_df['roi'].max()),
+            'approval_rate': float(metrics_df.loc[metrics_df['roi'].idxmax(), 'approval_rate'])
         },
-        'profit_metrics': {
-            'total_potential_profit': profit_metrics['total_potential_profit'],
-            'total_actual_profit': profit_metrics['total_actual_profit'],
-            'true_positive_profit': profit_metrics['true_pos_profit'],
-            'false_positive_profit': profit_metrics['false_pos_profit'],
-            'false_positive_loss': profit_metrics['false_pos_loss'],
-            'true_negative_avoided_loss': profit_metrics['true_neg_avoided_loss'],
-            'false_negative_profit': profit_metrics['false_neg_profit'],
-            'approved_profit': profit_metrics['approved_profit'],
-            'money_left_on_table': profit_metrics['money_left_on_table']
-        },
-        'classification_metrics': class_metrics,
-        'business_metrics': business_metrics
+        'f1_score': {
+            'threshold': float(metrics_df.loc[metrics_df['f1_score'].idxmax(), 'threshold']),
+            'value': float(metrics_df['f1_score'].max()),
+            'approval_rate': float(metrics_df.loc[metrics_df['f1_score'].idxmax(), 'approval_rate'])
+        }
     }
     
-    # Print summary
-    print("\nLoan Classification Summary:")
-    print(f"  Total loans: {loan_metrics['total_loans']}")
-    print(f"  Good loans (actual >= {target_threshold:.2f}): {loan_metrics['n_good']} " +
-          f"({loan_metrics['n_good']/loan_metrics['total_loans']*100:.1f}%)")
-    print(f"  Bad loans (actual < {target_threshold:.2f}): {loan_metrics['n_bad']} " + 
-          f"({loan_metrics['n_bad']/loan_metrics['total_loans']*100:.1f}%)")
+    # Create tradeoff analysis
+    tradeoffs = {
+        'metrics_by_threshold': metrics_df.to_dict('records'),
+        'optimal_thresholds': optima,
+        'business_parameters': business_params,
+        'recommendations': {
+            'profit_focused': optima['profit']['threshold'],
+            'roi_focused': optima['roi']['threshold'],
+            'balanced': (optima['profit']['threshold'] + optima['roi']['threshold']) / 2
+        }
+    }
     
-    print("\nModel Performance:")
-    print(f"  Accuracy: {class_metrics['accuracy']:.2f}")
-    print(f"  Approval rate: {business_metrics['approval_rate']:.2f}")
-    print(f"  Profit precision: {business_metrics['profit_precision']:.2f}")
+    # Calculate sensitivity analysis - how much profit changes with threshold
+    profit_sensitivity = []
     
-    print("\nProfit Analysis:")
-    print(f"  Total potential profit: {profit_metrics['total_potential_profit']:.2f}")
-    print(f"  Total actual profit: {profit_metrics['total_actual_profit']:.2f}")
-    print(f"  Approved loans profit: {profit_metrics['approved_profit']:.2f}")
-    print(f"  Money left on table: {profit_metrics['money_left_on_table']:.2f}")
+    for i in range(1, len(thresholds)):
+        prev_threshold = thresholds[i-1]
+        curr_threshold = thresholds[i]
+        
+        prev_profit = metrics_df[metrics_df['threshold'] == prev_threshold]['actual_profit'].values[0]
+        curr_profit = metrics_df[metrics_df['threshold'] == curr_threshold]['actual_profit'].values[0]
+        
+        threshold_diff = curr_threshold - prev_threshold
+        profit_diff = curr_profit - prev_profit
+        
+        if threshold_diff > 0:
+            sensitivity = profit_diff / threshold_diff
+        else:
+            sensitivity = 0.0
+        
+        profit_sensitivity.append({
+            'threshold_range': f"{prev_threshold:.2f}-{curr_threshold:.2f}",
+            'threshold_diff': threshold_diff,
+            'profit_diff': profit_diff,
+            'sensitivity': sensitivity
+        })
     
-    # Save results if output directory provided
-    if output_dir:
+    tradeoffs['sensitivity_analysis'] = profit_sensitivity
+    
+    # Save results if output_path provided
+    if output_path:
         # Create directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # Save tradeoff summary
-        summary_path = os.path.join(output_dir, "tradeoff_summary.json")
-        with open(summary_path, 'w') as f:
-            json.dump(tradeoff_summary, f, indent=2)
+        # Save tradeoffs as JSON
+        import json
+        with open(output_path, 'w') as f:
+            json.dump(tradeoffs, f, indent=2)
         
-        print(f"\nTradeoff analysis saved to {output_dir}")
+        # Also save metrics_df as CSV
+        metrics_path = output_path.replace('.json', '_metrics.csv')
+        metrics_df.to_csv(metrics_path, index=False)
+        
+        print(f"Cutoff tradeoff analysis saved to {output_path}")
+        print(f"Metrics data saved to {metrics_path}")
     
-    return {
-        'analysis': analysis,
-        'tradeoff_summary': tradeoff_summary
-    }
+    return tradeoffs

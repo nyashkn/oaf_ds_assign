@@ -12,6 +12,8 @@ EXCLUDE_VARS = [
     'cumulative_amount_paid',
     'nominal_contract_value',
     'contract_start_date',
+    'cumulative_amount_paid_start',
+    'diff_nov_23_to_sept_23_repayment_rate',
     # These variables directly relate to or derive from the target
     'sept_23_repayment_rate', 
     'nov_23_repayment_rate',

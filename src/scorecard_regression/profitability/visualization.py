@@ -1,415 +1,761 @@
 """
-Visualization functions for profitability analysis.
+Visualization functions for loan repayment rate prediction profitability.
 
-This module provides various plotting functions to visualize the results of
-threshold analysis and profit optimization.
+This module provides functions to visualize profitability metrics, threshold
+performance, and other business analytics for loan approval decisions.
 """
 
-import pandas as pd
+import os
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
 from typing import Dict, List, Optional, Tuple, Any, Union
+import matplotlib.patches as mpatches
+
+# Set Seaborn style
+sns.set_theme(style="whitegrid")
+plt.rcParams['figure.figsize'] = (12, 8)
+plt.rcParams['font.size'] = 12
 
 def plot_threshold_performance(
-    threshold_df: pd.DataFrame,
-    optimal_threshold: float,
+    metrics_df: pd.DataFrame,
     output_path: Optional[str] = None,
-    dpi: int = 300
+    title: Optional[str] = None,
+    highlight_threshold: Optional[float] = None,
+    figsize: Tuple[int, int] = (12, 10)
 ) -> plt.Figure:
     """
-    Plot approval rate and actual repayment rate vs threshold.
+    Plot key metrics vs threshold to visualize performance across thresholds.
     
     Args:
-        threshold_df: DataFrame with threshold analysis results
-        optimal_threshold: Optimal threshold value
+        metrics_df: DataFrame with metrics at different thresholds
+                   (should include 'threshold', 'profit', 'roi', etc.)
         output_path: Path to save the plot
-        dpi: DPI for saved plot
+        title: Custom title for the plot
+        highlight_threshold: Specific threshold to highlight
+        figsize: Figure size as (width, height)
         
     Returns:
         Matplotlib Figure object
     """
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    # Create figure with subplots
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
     
-    # Plot approval rate on left y-axis
-    ax1.plot(threshold_df['threshold'], threshold_df['approval_rate'] * 100, 
-             'b-', marker='o', label='Approval Rate (%)')
-    ax1.set_xlabel('Repayment Rate Threshold')
-    ax1.set_ylabel('Approval Rate (%)', color='b')
-    ax1.tick_params(axis='y', labelcolor='b')
+    # Profit vs Threshold
+    axs[0, 0].plot(metrics_df['threshold'], metrics_df['actual_profit'] 
+                  if 'actual_profit' in metrics_df.columns else metrics_df['profit'], 
+                  'o-', color='#2C7BB6')
+    axs[0, 0].set_xlabel('Threshold')
+    axs[0, 0].set_ylabel('Profit')
+    axs[0, 0].set_title('Profit vs Threshold')
+    axs[0, 0].grid(True, linestyle='--', alpha=0.7)
     
-    # Plot actual repayment rate on right y-axis
-    ax2 = ax1.twinx()
-    ax2.plot(threshold_df['threshold'], threshold_df['actual_repayment_rate'] * 100, 
-             'g-', marker='s', label='Actual Repayment Rate (%)')
-    ax2.set_ylabel('Actual Repayment Rate (%)', color='g')
-    ax2.tick_params(axis='y', labelcolor='g')
+    # ROI vs Threshold
+    roi_col = 'roi'
+    if roi_col in metrics_df.columns:
+        # Convert to percentage
+        roi_values = metrics_df[roi_col] * 100
+        axs[0, 1].plot(metrics_df['threshold'], roi_values, 'o-', color='#D7191C')
+        axs[0, 1].set_xlabel('Threshold')
+        axs[0, 1].set_ylabel('ROI (%)')
+        axs[0, 1].set_title('ROI vs Threshold')
+        axs[0, 1].grid(True, linestyle='--', alpha=0.7)
     
-    # Add vertical line for optimal threshold
-    plt.axvline(x=optimal_threshold, color='r', linestyle='--', 
-               label=f'Optimal Threshold = {optimal_threshold:.2f}')
+    # Approval Rate vs Threshold
+    approval_col = 'approval_rate'
+    if approval_col in metrics_df.columns:
+        # Convert to percentage
+        approval_values = metrics_df[approval_col] * 100
+        axs[1, 0].plot(metrics_df['threshold'], approval_values, 'o-', color='#1A9641')
+        axs[1, 0].set_xlabel('Threshold')
+        axs[1, 0].set_ylabel('Approval Rate (%)')
+        axs[1, 0].set_title('Approval Rate vs Threshold')
+        axs[1, 0].grid(True, linestyle='--', alpha=0.7)
     
-    # Combine legends
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
+    # F1 Score vs Threshold
+    f1_col = 'f1_score'
+    if f1_col in metrics_df.columns:
+        axs[1, 1].plot(metrics_df['threshold'], metrics_df[f1_col], 'o-', color='#7570B3')
+        axs[1, 1].set_xlabel('Threshold')
+        axs[1, 1].set_ylabel('F1 Score')
+        axs[1, 1].set_title('F1 Score vs Threshold')
+        axs[1, 1].grid(True, linestyle='--', alpha=0.7)
     
-    plt.title('Approval Rate and Actual Repayment Rate vs Threshold')
-    plt.grid(True, alpha=0.3)
+    # Highlight specific threshold if provided
+    if highlight_threshold is not None:
+        for ax in axs.flat:
+            ax.axvline(x=highlight_threshold, color='r', linestyle='--', alpha=0.7,
+                      label=f'Threshold = {highlight_threshold:.2f}')
+            
+            # Add a legend
+            ax.legend(loc='best')
+    
+    # Set a main title
+    if title:
+        fig.suptitle(title, fontsize=16, y=1.02)
+    else:
+        fig.suptitle('Threshold Performance Analysis', fontsize=16, y=1.02)
+    
+    # Adjust layout
     plt.tight_layout()
     
-    # Save plot if output path provided
+    # Save figure if output_path provided
     if output_path:
-        plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Save figure
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Threshold performance plot saved to {output_path}")
     
     return fig
+
 
 def plot_profit_metrics(
-    threshold_df: pd.DataFrame,
-    optimal_threshold: float,
+    metrics_df: pd.DataFrame,
     output_path: Optional[str] = None,
-    dpi: int = 300
+    title: Optional[str] = None,
+    highlight_threshold: Optional[float] = None,
+    figsize: Tuple[int, int] = (12, 10)
 ) -> plt.Figure:
     """
-    Plot profit metrics vs threshold.
+    Create a more detailed profit metrics visualization.
     
     Args:
-        threshold_df: DataFrame with threshold analysis results
-        optimal_threshold: Optimal threshold value
+        metrics_df: DataFrame with metrics at different thresholds
         output_path: Path to save the plot
-        dpi: DPI for saved plot
+        title: Custom title for the plot
+        highlight_threshold: Specific threshold to highlight
+        figsize: Figure size as (width, height)
         
     Returns:
         Matplotlib Figure object
     """
-    plt.figure(figsize=(12, 8))
+    # Create figure with subplots
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
     
-    plt.plot(threshold_df['threshold'], threshold_df['total_actual_profit'], 
-             'b-', marker='o', label='Total Actual Profit')
-    plt.plot(threshold_df['threshold'], threshold_df['money_left_on_table'], 
-             'r-', marker='s', label='Money Left on Table')
+    # Helper function to find the best threshold for a metric
+    def find_best_threshold(metric_col, maximize=True):
+        if metric_col not in metrics_df.columns:
+            return None
+        
+        if maximize:
+            idx = metrics_df[metric_col].idxmax()
+        else:
+            idx = metrics_df[metric_col].idxmin()
+            
+        return metrics_df.loc[idx, 'threshold']
     
-    # Add vertical line for optimal threshold
-    plt.axvline(x=optimal_threshold, color='g', linestyle='--', 
-               label=f'Optimal Threshold = {optimal_threshold:.2f}')
+    # Profit vs Threshold with both actual and expected
+    profit_ax = axs[0, 0]
+    if 'actual_profit' in metrics_df.columns:
+        profit_ax.plot(metrics_df['threshold'], metrics_df['actual_profit'], 'o-', 
+                      color='#2C7BB6', label='Actual Profit')
     
-    plt.xlabel('Repayment Rate Threshold')
-    plt.ylabel('Profit')
-    plt.title('Profit Metrics vs Threshold')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
+    if 'expected_profit' in metrics_df.columns:
+        profit_ax.plot(metrics_df['threshold'], metrics_df['expected_profit'], 's--', 
+                      color='#5AAE61', label='Expected Profit')
+    
+    if 'actual_profit' in metrics_df.columns:
+        best_profit = find_best_threshold('actual_profit')
+        if best_profit is not None:
+            profit_ax.axvline(x=best_profit, color='#2C7BB6', linestyle='--', alpha=0.7,
+                           label=f'Best Profit Threshold = {best_profit:.2f}')
+    
+    profit_ax.set_xlabel('Threshold')
+    profit_ax.set_ylabel('Profit')
+    profit_ax.set_title('Profit vs Threshold')
+    profit_ax.grid(True, linestyle='--', alpha=0.7)
+    profit_ax.legend(loc='best')
+    
+    # ROI vs Profit 
+    roi_profit_ax = axs[0, 1]
+    if 'roi' in metrics_df.columns and ('actual_profit' in metrics_df.columns or 'profit' in metrics_df.columns):
+        profit_col = 'actual_profit' if 'actual_profit' in metrics_df.columns else 'profit'
+        roi_profit_ax.scatter(metrics_df[profit_col], metrics_df['roi'] * 100, 
+                           c=metrics_df['threshold'], cmap='viridis', s=50)
+        roi_profit_ax.set_xlabel('Profit')
+        roi_profit_ax.set_ylabel('ROI (%)')
+        roi_profit_ax.set_title('ROI vs Profit')
+        
+        # Add colorbar
+        cbar = plt.colorbar(plt.cm.ScalarMappable(cmap='viridis'), ax=roi_profit_ax)
+        cbar.set_label('Threshold')
+        
+        # Add labels for min and max thresholds
+        min_threshold = metrics_df['threshold'].min()
+        max_threshold = metrics_df['threshold'].max()
+        
+        min_idx = metrics_df['threshold'].idxmin()
+        max_idx = metrics_df['threshold'].idxmax()
+        
+        roi_profit_ax.annotate(f'Min Threshold: {min_threshold:.2f}',
+                           xy=(metrics_df.loc[min_idx, profit_col], 
+                               metrics_df.loc[min_idx, 'roi'] * 100),
+                           xytext=(10, 10),
+                           textcoords='offset points',
+                           arrowprops=dict(arrowstyle='->'))
+        
+        roi_profit_ax.annotate(f'Max Threshold: {max_threshold:.2f}',
+                           xy=(metrics_df.loc[max_idx, profit_col], 
+                               metrics_df.loc[max_idx, 'roi'] * 100),
+                           xytext=(10, -20),
+                           textcoords='offset points',
+                           arrowprops=dict(arrowstyle='->'))
+    
+    # Actual vs Expected Profit Difference
+    diff_ax = axs[1, 0]
+    if 'actual_profit' in metrics_df.columns and 'expected_profit' in metrics_df.columns:
+        # Calculate difference
+        metrics_df['profit_diff'] = metrics_df['actual_profit'] - metrics_df['expected_profit']
+        
+        diff_ax.plot(metrics_df['threshold'], metrics_df['profit_diff'], 'o-', color='#D73027')
+        diff_ax.axhline(y=0, color='k', linestyle='-', alpha=0.3)
+        diff_ax.set_xlabel('Threshold')
+        diff_ax.set_ylabel('Actual - Expected Profit')
+        diff_ax.set_title('Profit Prediction Gap')
+        diff_ax.grid(True, linestyle='--', alpha=0.7)
+    
+    # Approval Rate and ROI
+    combo_ax = axs[1, 1]
+    if 'approval_rate' in metrics_df.columns and 'roi' in metrics_df.columns:
+        # Plot approval rate
+        color1 = '#1A9641'
+        ln1 = combo_ax.plot(metrics_df['threshold'], metrics_df['approval_rate'] * 100, 
+                         'o-', color=color1, label='Approval Rate (%)')
+        combo_ax.set_xlabel('Threshold')
+        combo_ax.set_ylabel('Approval Rate (%)', color=color1)
+        combo_ax.tick_params(axis='y', labelcolor=color1)
+        
+        # Create a twin axis for ROI
+        combo_ax2 = combo_ax.twinx()
+        color2 = '#D73027'
+        ln2 = combo_ax2.plot(metrics_df['threshold'], metrics_df['roi'] * 100, 
+                          's-', color=color2, label='ROI (%)')
+        combo_ax2.set_ylabel('ROI (%)', color=color2)
+        combo_ax2.tick_params(axis='y', labelcolor=color2)
+        
+        # Combine legends
+        lns = ln1 + ln2
+        labs = [l.get_label() for l in lns]
+        combo_ax.legend(lns, labs, loc='upper left')
+        
+        combo_ax.set_title('Approval Rate and ROI vs Threshold')
+        combo_ax.grid(True, linestyle='--', alpha=0.7)
+    
+    # Set a main title
+    if title:
+        fig.suptitle(title, fontsize=16, y=1.02)
+    else:
+        fig.suptitle('Detailed Profit Metrics Analysis', fontsize=16, y=1.02)
+    
+    # Highlight specific threshold if provided
+    if highlight_threshold is not None:
+        for ax in [profit_ax, diff_ax, combo_ax]:
+            ax.axvline(x=highlight_threshold, color='purple', linestyle='--', alpha=0.7,
+                      label=f'Threshold = {highlight_threshold:.2f}')
+    
+    # Adjust layout
     plt.tight_layout()
     
-    # Save plot if output path provided
+    # Save figure if output_path provided
     if output_path:
-        plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Save figure
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Profit metrics plot saved to {output_path}")
     
-    return plt.gcf()
+    return fig
+
 
 def plot_confusion_matrix(
-    loan_metrics: Dict[str, Any],
-    target_threshold: float,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    threshold: float = 0.8,
+    normalize: bool = True,
     output_path: Optional[str] = None,
-    dpi: int = 300
+    figsize: Tuple[int, int] = (10, 8)
 ) -> plt.Figure:
     """
-    Plot confusion matrix for loan classification.
+    Plot confusion matrix for loan approval decisions at a given threshold.
     
     Args:
-        loan_metrics: Dictionary with loan metrics
-        target_threshold: Target repayment rate threshold
+        y_true: True repayment rates
+        y_pred: Predicted repayment rates
+        threshold: Threshold for loan approval
+        normalize: Whether to normalize the confusion matrix
         output_path: Path to save the plot
-        dpi: DPI for saved plot
+        figsize: Figure size as (width, height)
         
     Returns:
         Matplotlib Figure object
     """
-    # Extract confusion matrix elements
-    n_true_pos = loan_metrics['n_true_pos']
-    n_false_pos = loan_metrics['n_false_pos']
-    n_true_neg = loan_metrics['n_true_neg']
-    n_false_neg = loan_metrics['n_false_neg']
+    # Convert continuous values to binary using threshold
+    y_true_bin = (y_true >= threshold).astype(int)
+    y_pred_bin = (y_pred >= threshold).astype(int)
     
-    # Create confusion matrix data
-    confusion_data = [
-        [n_true_pos, n_false_neg],
-        [n_false_pos, n_true_neg]
-    ]
+    # Calculate confusion matrix
+    from sklearn.metrics import confusion_matrix
+    cm = confusion_matrix(y_true_bin, y_pred_bin)
     
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(confusion_data, annot=True, fmt="d", cmap="Blues", cbar=False,
-               xticklabels=[f"Actual ≥ {target_threshold:.2f}", f"Actual < {target_threshold:.2f}"],
-               yticklabels=[f"Predicted ≥ {target_threshold:.2f}", f"Predicted < {target_threshold:.2f}"])
-    plt.title(f"Loan Classification Confusion Matrix (Threshold = {target_threshold:.2f})")
-    plt.ylabel("Predicted")
-    plt.xlabel("Actual")
+    # Normalize if requested
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        cm = np.round(cm, 2)
     
-    # Add percentage annotations
-    total = sum([sum(row) for row in confusion_data])
-    for i in range(2):
-        for j in range(2):
-            text = ax.texts[i*2 + j]
-            current_value = confusion_data[i][j]
-            percentage = current_value / total * 100 if total > 0 else 0
-            text.set_text(f"{current_value}\n({percentage:.1f}%)")
+    # Create plot
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Use seaborn heatmap
+    sns.heatmap(cm, annot=True, fmt='.2f' if normalize else 'd', cmap='Blues',
+               xticklabels=['Reject', 'Approve'],
+               yticklabels=['Bad Loan', 'Good Loan'],
+               ax=ax)
+    
+    # Add labels
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('Actual')
+    ax.set_title(f'Confusion Matrix (Threshold = {threshold:.2f})')
+    
+    # Add descriptive labels in the corners
+    fontdict = {'fontsize': 9, 'fontweight': 'bold', 'color': 'darkslategray'}
+    
+    # True Negative (bottom-left)
+    ax.text(0.2, 1.7, 'True Negative\n(Correct Rejection)', 
+           ha='center', va='center', fontdict=fontdict)
+    
+    # False Positive (bottom-right)
+    ax.text(1.2, 1.7, 'False Positive\n(Type I Error)', 
+           ha='center', va='center', fontdict=fontdict)
+    
+    # False Negative (top-left)
+    ax.text(0.2, 0.7, 'False Negative\n(Type II Error)', 
+           ha='center', va='center', fontdict=fontdict)
+    
+    # True Positive (top-right)
+    ax.text(1.2, 0.7, 'True Positive\n(Correct Approval)', 
+           ha='center', va='center', fontdict=fontdict)
     
     plt.tight_layout()
     
-    # Save plot if output path provided
+    # Save figure if output_path provided
     if output_path:
-        plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Save figure
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Confusion matrix plot saved to {output_path}")
     
     return fig
 
+
 def create_executive_summary(
-    loan_metrics: Dict[str, Any],
-    profit_metrics: Dict[str, Any],
-    class_metrics: Dict[str, float],
-    target_threshold: float,
+    metrics: Dict[str, Any],
     output_path: Optional[str] = None,
-    dpi: int = 300
+    figsize: Tuple[int, int] = (12, 10)
 ) -> plt.Figure:
     """
-    Create an executive summary visualization of profitability analysis.
+    Create an executive summary visualization of loan repayment prediction.
     
     Args:
-        loan_metrics: Dictionary with loan metrics
-        profit_metrics: Dictionary with profit metrics
-        class_metrics: Dictionary with classification metrics
-        target_threshold: Target repayment rate threshold
+        metrics: Dictionary with various metrics from threshold analysis
         output_path: Path to save the plot
-        dpi: DPI for saved plot
+        figsize: Figure size as (width, height)
         
     Returns:
         Matplotlib Figure object
     """
-    # Extract metrics
-    n_good = loan_metrics['n_good']
-    n_bad = loan_metrics['n_bad']
-    total_loans = loan_metrics['total_loans']
+    # Create figure
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
     
-    n_true_pos = loan_metrics['n_true_pos']
-    n_false_pos = loan_metrics['n_false_pos']
-    n_true_neg = loan_metrics['n_true_neg']
-    n_false_neg = loan_metrics['n_false_neg']
+    # Extract key metrics
+    threshold = metrics.get('optimal_thresholds', {}).get('profit_focused', 0.8)
+    profit = metrics.get('profit_metrics', {}).get('actual_profit', 0)
+    roi = metrics.get('profit_metrics', {}).get('roi', 0) * 100  # Convert to percentage
+    approval_rate = metrics.get('loan_metrics', {}).get('n_loans', {}).get('approval_rate', 0) * 100
     
-    # Create executive summary plot
-    fig = plt.figure(figsize=(15, 10))
+    # Get loan counts
+    loan_counts = metrics.get('loan_metrics', {}).get('loan_categories', {})
     
-    # Define grid layout
-    gs = plt.GridSpec(2, 3, figure=fig)
+    # Loan approval decision pie chart
+    axs[0, 0].set_title('Loan Approval Decisions')
     
-    # Panel 1: Loan Classification
-    ax1 = fig.add_subplot(gs[0, 0])
-    labels = ['Good Loans', 'Bad Loans']
-    sizes = [n_good, n_bad]
-    colors = ['#4ECDC4', '#FF6B6B']
-    ax1.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
-    ax1.set_title(f'Loan Quality (Threshold = {target_threshold:.2f})')
+    good_approved = loan_counts.get('good_approved', {}).get('count', 0)
+    bad_approved = loan_counts.get('bad_approved', {}).get('count', 0)
+    good_rejected = loan_counts.get('good_rejected', {}).get('count', 0)
+    bad_rejected = loan_counts.get('bad_rejected', {}).get('count', 0)
     
-    # Panel 2: Model Performance
-    ax2 = fig.add_subplot(gs[0, 1])
-    metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
-    values = [
-        class_metrics['accuracy'], 
-        class_metrics['precision'], 
-        class_metrics['recall'], 
-        class_metrics['f1_score']
-    ]
-    ax2.bar(metrics, values, color='#1A535C')
-    ax2.set_ylim(0, 1)
-    ax2.set_title('Classification Metrics')
-    for i, v in enumerate(values):
-        ax2.text(i, v + 0.02, f"{v:.2f}", ha='center')
+    sizes = [good_approved, bad_approved, good_rejected, bad_rejected]
+    labels = ['Good Approved', 'Bad Approved', 'Good Rejected', 'Bad Rejected']
+    colors = ['#1A9641', '#D73027', '#A6D96A', '#FC8D59']
     
-    # Panel 3: Approval/Rejection Rate
-    ax3 = fig.add_subplot(gs[0, 2])
-    labels = ['Approved', 'Rejected']
-    sizes = [n_true_pos + n_false_pos, n_true_neg + n_false_neg]
-    colors = ['#4ECDC4', '#FF6B6B']
-    ax3.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
-    ax3.set_title('Loan Decisions')
+    axs[0, 0].pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+    axs[0, 0].axis('equal')
     
-    # Panel 4: Profit Analysis (spans bottom row)
-    ax4 = fig.add_subplot(gs[1, :])
-    
-    # Extract profit metrics for visualization
-    true_pos_profit = profit_metrics['true_pos_profit']
-    false_pos_profit = profit_metrics['false_pos_profit']
-    money_left_on_table = profit_metrics['money_left_on_table']
-    total_actual_profit = profit_metrics['total_actual_profit']
-    
-    # Set up bar chart
-    profit_categories = ['Profit from\nGood Loans', 'Profit from\nBad Loans', 
-                         'Money Left\non Table', 'Total\nProfit']
-    profit_values = [true_pos_profit, false_pos_profit, money_left_on_table, total_actual_profit]
-    profit_colors = ['#4ECDC4', '#FF6B6B', '#F4A261', '#2A9D8F']
-    
-    bars = ax4.bar(profit_categories, profit_values, color=profit_colors)
-    
-    # Add labels
-    for bar in bars:
-        height = bar.get_height()
-        ax4.text(bar.get_x() + bar.get_width()/2., height + 5,
-                f'{height:.0f}', ha='center', va='bottom')
-    
-    ax4.set_title('Profit Analysis')
-    ax4.set_ylabel('Amount')
-    ax4.grid(axis='y', linestyle='--', alpha=0.7)
-    
-    # Add approval rate annotation
-    approval_rate = (n_true_pos + n_false_pos) / total_loans if total_loans > 0 else 0
-    
-    # Add title and important conclusions
-    plt.suptitle(f"Profitability Analysis: Threshold = {target_threshold:.2f}", fontsize=16, y=0.98)
-    
-    bottom_text = (
-        f"Approval Rate: {approval_rate:.1%} • "
-        f"Expected Profit per Loan: {total_actual_profit/total_loans:.2f} • "
-        f"Profit from Approved: {(true_pos_profit + false_pos_profit):.0f} • "
-        f"Money Left on Table: {money_left_on_table:.0f}"
+    # Metrics summary
+    axs[0, 1].axis('off')  # Turn off axis
+    metrics_text = (
+        f"Optimal Threshold: {threshold:.2f}\n\n"
+        f"Profit: {profit:.2f}\n\n"
+        f"ROI: {roi:.1f}%\n\n"
+        f"Approval Rate: {approval_rate:.1f}%\n\n"
     )
     
-    plt.figtext(0.5, 0.01, bottom_text, ha="center", fontsize=12, 
-               bbox={"facecolor":"#E9C46A", "alpha":0.5, "pad":5})
+    axs[0, 1].text(0.5, 0.5, metrics_text, 
+                  ha='center', va='center', 
+                  fontsize=14,
+                  bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=1'))
     
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    # Loan value distribution
+    loan_values = metrics.get('loan_metrics', {}).get('loan_values', {})
     
-    # Save plot if output path provided
+    approved_value = loan_values.get('approved', 0)
+    rejected_value = loan_values.get('rejected', 0)
+    
+    axs[1, 0].set_title('Loan Value Distribution')
+    axs[1, 0].bar([0, 1], [approved_value, rejected_value], 
+                 color=['#66C2A5', '#FC8D62'])
+    axs[1, 0].set_xticks([0, 1])
+    axs[1, 0].set_xticklabels(['Approved', 'Rejected'])
+    axs[1, 0].set_ylabel('Loan Value')
+    
+    # Add values on top of bars
+    for i, v in enumerate([approved_value, rejected_value]):
+        axs[1, 0].text(i, v, f"{v:.0f}", ha='center', va='bottom')
+    
+    # Expected vs actual repayment
+    predicted_repayment = metrics.get('repayment_rates', {}).get('predicted_avg', 0) * 100
+    actual_repayment = metrics.get('repayment_rates', {}).get('actual_avg', 0) * 100
+    
+    axs[1, 1].set_title('Expected vs Actual Repayment Rate')
+    axs[1, 1].bar([0, 1], [predicted_repayment, actual_repayment], 
+                 color=['#8DA0CB', '#66C2A5'])
+    axs[1, 1].set_xticks([0, 1])
+    axs[1, 1].set_xticklabels(['Expected', 'Actual'])
+    axs[1, 1].set_ylabel('Repayment Rate (%)')
+    axs[1, 1].set_ylim([0, 100])
+    
+    # Add values on top of bars
+    for i, v in enumerate([predicted_repayment, actual_repayment]):
+        axs[1, 1].text(i, v, f"{v:.1f}%", ha='center', va='bottom')
+    
+    # Set a main title
+    fig.suptitle('Loan Repayment Prediction Executive Summary', fontsize=16, y=0.98)
+    
+    plt.tight_layout()
+    
+    # Save figure if output_path provided
     if output_path:
-        plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Save figure
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Executive summary plot saved to {output_path}")
     
     return fig
+
 
 def plot_optimization_results(
     optimization_results: Dict[str, Any],
-    metric: str = 'total_actual_profit',
     output_path: Optional[str] = None,
-    dpi: int = 300
+    figsize: Tuple[int, int] = (12, 8)
 ) -> plt.Figure:
     """
-    Plot optimization results including the profit curve and optimal threshold.
+    Visualize the results of threshold optimization.
     
     Args:
-        optimization_results: Dictionary with optimization results
-        metric: Profit metric optimized
+        optimization_results: Results from optimization functions
         output_path: Path to save the plot
-        dpi: DPI for saved plot
+        figsize: Figure size as (width, height)
         
     Returns:
         Matplotlib Figure object
     """
-    # Extract results
-    optimal_threshold = optimization_results['optimal_threshold']
-    profit_curve = optimization_results['profit_curve']
+    # Extract data from optimization results
+    if 'results' not in optimization_results:
+        raise ValueError("Optimization results must contain 'results' key")
     
-    # Convert profit curve to arrays
-    threshold_values = [t for t, _ in profit_curve]
-    profit_values = [v for _, v in profit_curve]
+    # Convert to DataFrame if necessary
+    if isinstance(optimization_results['results'], list):
+        results_df = pd.DataFrame(optimization_results['results'])
+    else:
+        results_df = optimization_results['results']
     
-    # Create plot
-    plt.figure(figsize=(12, 6))
+    # Get optimal threshold
+    optimal_threshold = optimization_results.get('optimal_threshold', None)
     
-    plt.plot(threshold_values, profit_values, 'b-', linewidth=2)
-    plt.axvline(x=optimal_threshold, color='r', linestyle='--', 
-                label=f'Optimal Threshold = {optimal_threshold:.4f}')
+    # Create figure with subplots
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
     
-    # Add points for each evaluated threshold
-    plt.scatter(threshold_values, profit_values, color='b', s=30)
+    # Plot optimization objective
+    objective = optimization_results.get('objective', 'profit')
     
-    # Add a larger marker for the optimal point
-    optimal_value_idx = min(range(len(threshold_values)), 
-                           key=lambda i: abs(threshold_values[i] - optimal_threshold))
-    optimal_value = profit_values[optimal_value_idx]
-    plt.scatter([optimal_threshold], [optimal_value], color='r', s=100, zorder=5)
+    # Helper function to select color based on objective
+    def get_objective_color(obj):
+        colors = {
+            'profit': '#2C7BB6',
+            'roi': '#D73027',
+            'f1': '#7570B3'
+        }
+        return colors.get(obj, '#000000')
     
-    # Add text annotation for optimal point
-    plt.annotate(f'Optimal: ({optimal_threshold:.4f}, {optimal_value:.2f})',
-                xy=(optimal_threshold, optimal_value),
-                xytext=(optimal_threshold + 0.02, optimal_value + 0.1 * (max(profit_values) - min(profit_values))),
-                arrowprops=dict(facecolor='black', arrowstyle='->'),
-                fontsize=10)
+    # Main objective plot
+    ax_obj = axs[0, 0]
+    objective_col = 'profit' if objective == 'profit' else objective
+    if objective_col in results_df.columns:
+        ax_obj.plot(results_df['threshold'], results_df[objective_col], 'o-', 
+                   color=get_objective_color(objective))
+        
+        if optimal_threshold is not None:
+            # Find value at optimal threshold
+            opt_row = results_df[results_df['threshold'] == optimal_threshold]
+            if not opt_row.empty:
+                opt_value = opt_row[objective_col].values[0]
+                
+                # Highlight optimal point
+                ax_obj.plot([optimal_threshold], [opt_value], 'o', 
+                           color='red', markersize=10)
+                
+                # Add vertical line
+                ax_obj.axvline(x=optimal_threshold, color='red', linestyle='--', alpha=0.7,
+                            label=f'Optimal: {optimal_threshold:.2f}')
+                
+        ax_obj.set_xlabel('Threshold')
+        ax_obj.set_ylabel(objective.capitalize())
+        ax_obj.set_title(f'{objective.capitalize()} vs Threshold')
+        ax_obj.grid(True, linestyle='--', alpha=0.7)
+        ax_obj.legend()
     
-    metric_label = "Profit" if metric == "total_actual_profit" else "Value"
-    plt.xlabel('Threshold')
-    plt.ylabel(f'{metric_label}')
-    plt.title(f'Optimization Results: {metric}')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
+    # Other metrics (approval rate, ROI if not objective)
+    ax_other = axs[0, 1]
+    
+    # Always include approval rate
+    if 'approval_rate' in results_df.columns:
+        color = '#1A9641'
+        ln1 = ax_other.plot(results_df['threshold'], results_df['approval_rate'] * 100, 
+                         'o-', color=color, label='Approval Rate (%)')
+        ax_other.set_xlabel('Threshold')
+        ax_other.set_ylabel('Approval Rate (%)', color=color)
+        ax_other.tick_params(axis='y', labelcolor=color)
+    
+    # Add ROI if it's not the main objective
+    if objective != 'roi' and 'roi' in results_df.columns:
+        # Create a twin axis
+        ax_roi = ax_other.twinx()
+        color = '#D73027'
+        ln2 = ax_roi.plot(results_df['threshold'], results_df['roi'] * 100, 
+                       's-', color=color, label='ROI (%)')
+        ax_roi.set_ylabel('ROI (%)', color=color)
+        ax_roi.tick_params(axis='y', labelcolor=color)
+        
+        # Combine legends if both metrics are plotted
+        if 'approval_rate' in results_df.columns:
+            lns = ln1 + ln2
+            labs = [l.get_label() for l in lns]
+            ax_other.legend(lns, labs, loc='upper left')
+        else:
+            ax_roi.legend()
+    else:
+        # Just add the legend for approval rate
+        if 'approval_rate' in results_df.columns:
+            ax_other.legend()
+    
+    # Add title
+    ax_other.set_title('Key Metrics vs Threshold')
+    ax_other.grid(True, linestyle='--', alpha=0.7)
+    
+    # Highlight optimal threshold if provided
+    if optimal_threshold is not None:
+        ax_other.axvline(x=optimal_threshold, color='red', linestyle='--', alpha=0.7)
+    
+    # Optimization method performance
+    ax_method = axs[1, 0]
+    
+    method = optimization_results.get('method', 'grid')
+    ax_method.text(0.5, 0.5, 
+                 f"Optimization Method: {method.capitalize()}\n\n"
+                 f"Objective: {objective.capitalize()}\n\n"
+                 f"Optimal Threshold: {optimal_threshold:.4f}" if optimal_threshold else "No optimal threshold found",
+                 ha='center', va='center',
+                 fontsize=12,
+                 bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=1'))
+    ax_method.axis('off')
+    
+    # Constraints and parameters
+    ax_params = axs[1, 1]
+    
+    # Get constraints
+    constraints = optimization_results.get('constraints', {})
+    parameters = optimization_results.get('parameters', {})
+    
+    # Combine all parameters
+    all_params = {}
+    if constraints:
+        all_params.update({f"constraint_{k}": v for k, v in constraints.items()})
+    if parameters:
+        all_params.update(parameters)
+    
+    # Create a string with all parameters
+    params_str = "\n".join([f"{k}: {v}" for k, v in all_params.items()])
+    
+    ax_params.text(0.5, 0.5, 
+                  f"Parameters:\n\n{params_str}",
+                  ha='center', va='center',
+                  fontsize=10,
+                  bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=1'))
+    ax_params.axis('off')
+    
+    # Set a main title
+    fig.suptitle(f'Threshold Optimization Results ({method.capitalize()})', fontsize=16, y=0.98)
     
     plt.tight_layout()
     
-    # Save plot if output path provided
+    # Save figure if output_path provided
     if output_path:
-        plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Save figure
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Optimization results plot saved to {output_path}")
     
-    return plt.gcf()
+    return fig
+
 
 def plot_pareto_frontier(
-    pareto_frontier: List[Tuple[float, float, float]],
+    metrics_df: pd.DataFrame,
+    x_col: str = 'roi',
+    y_col: str = 'profit',
     output_path: Optional[str] = None,
-    dpi: int = 300
+    highlight_threshold: Optional[float] = None,
+    figsize: Tuple[int, int] = (10, 8)
 ) -> plt.Figure:
     """
-    Plot the Pareto frontier from multi-objective optimization.
+    Plot the Pareto frontier for multiple optimization objectives.
     
     Args:
-        pareto_frontier: List of (threshold, profit, money_left) tuples
+        metrics_df: DataFrame with metrics at different thresholds
+        x_col: Column to use for x-axis
+        y_col: Column to use for y-axis
         output_path: Path to save the plot
-        dpi: DPI for saved plot
+        highlight_threshold: Specific threshold to highlight
+        figsize: Figure size as (width, height)
         
     Returns:
         Matplotlib Figure object
     """
-    # Extract values
-    thresholds = [t for t, _, _ in pareto_frontier]
-    profits = [p for _, p, _ in pareto_frontier]
-    money_left = [m for _, _, m in pareto_frontier]
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
     
-    # Create plot
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    # Check if columns exist
+    if x_col not in metrics_df.columns or y_col not in metrics_df.columns:
+        raise ValueError(f"Columns {x_col} and/or {y_col} not found in metrics DataFrame")
     
-    # Plot profit vs money left
-    sc = ax1.scatter(profits, money_left, c=thresholds, cmap='viridis', 
-                    s=100, alpha=0.8)
+    # Scale ROI to percentage if needed
+    x_data = metrics_df[x_col]
+    if x_col == 'roi':
+        x_data = x_data * 100  # Convert to percentage
     
-    # Add colorbar for thresholds
-    cbar = plt.colorbar(sc, ax=ax1)
+    # Create scatter plot with threshold as color
+    scatter = ax.scatter(
+        x_data, 
+        metrics_df[y_col],
+        c=metrics_df['threshold'],
+        cmap='viridis',
+        s=60,
+        alpha=0.8
+    )
+    
+    # Add colorbar
+    cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label('Threshold')
     
-    # Add labels to each point
-    for i, (t, p, m) in enumerate(pareto_frontier):
-        ax1.annotate(f"{t:.2f}", (p, m), fontsize=8)
+    # Identify Pareto-optimal points
+    # A point is Pareto-optimal if no other point dominates it
+    # (i.e., no other point is better in both dimensions)
+    pareto_points = []
     
-    ax1.set_xlabel('Total Profit')
-    ax1.set_ylabel('Money Left on Table')
-    ax1.set_title('Pareto Frontier: Profit vs Money Left on Table')
-    ax1.grid(True, alpha=0.3)
+    # Sort by x_col (ascending) to find Pareto frontier
+    sorted_df = metrics_df.sort_values(x_col)
     
-    # Plot metrics vs threshold
-    ax2.plot(thresholds, profits, 'b-o', label='Total Profit')
-    ax2.set_xlabel('Threshold')
-    ax2.set_ylabel('Total Profit', color='b')
-    ax2.tick_params(axis='y', labelcolor='b')
+    # Initialize with the point having the highest y_col value
+    best_y = float('-inf')
     
-    ax2_2 = ax2.twinx()
-    ax2_2.plot(thresholds, money_left, 'r-o', label='Money Left on Table')
-    ax2_2.set_ylabel('Money Left on Table', color='r')
-    ax2_2.tick_params(axis='y', labelcolor='r')
+    for idx, row in sorted_df.iterrows():
+        if row[y_col] > best_y:
+            best_y = row[y_col]
+            pareto_points.append((row[x_col], row[y_col], row['threshold']))
     
-    # Create legend
-    lines1, labels1 = ax2.get_legend_handles_labels()
-    lines2, labels2 = ax2_2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center')
+    # Convert to arrays for plotting
+    pareto_x = [p[0] for p in pareto_points]
+    pareto_y = [p[1] for p in pareto_points]
+    pareto_thresholds = [p[2] for p in pareto_points]
     
-    ax2.set_title('Metrics vs Threshold')
-    ax2.grid(True, alpha=0.3)
+    # If x is ROI, convert to percentage for Pareto points too
+    if x_col == 'roi':
+        pareto_x = [x * 100 for x in pareto_x]
+    
+    # Plot Pareto frontier
+    ax.plot(pareto_x, pareto_y, 'r--', linewidth=2, label='Pareto Frontier')
+    
+    # Highlight Pareto points
+    ax.scatter(pareto_x, pareto_y, c='red', s=100, zorder=5, alpha=0.8)
+    
+    # Annotate Pareto points with thresholds
+    for i, (x, y, t) in enumerate(zip(pareto_x, pareto_y, pareto_thresholds)):
+        ax.annotate(
+            f'{t:.2f}',
+            xy=(x, y),
+            xytext=(5, 5),
+            textcoords='offset points',
+            fontsize=8
+        )
+    
+    # Highlight specific threshold if provided
+    if highlight_threshold is not None:
+        highlight_row = metrics_df[metrics_df['threshold'] == highlight_threshold]
+        if not highlight_row.empty:
+            x_val = highlight_row[x_col].values[0]
+            if x_col == 'roi':
+                x_val = x_val * 100
+            
+            y_val = highlight_row[y_col].values[0]
+            
+            ax.scatter(
+                [x_val], 
+                [y_val],
+                c='purple',
+                s=150,
+                marker='*',
+                label=f'Selected Threshold ({highlight_threshold:.2f})',
+                zorder=10
+            )
+    
+    # Set labels and title
+    ax.set_xlabel(f"{x_col.upper() if x_col == 'roi' else x_col.capitalize()} {'(%)' if x_col == 'roi' else ''}")
+    ax.set_ylabel(y_col.capitalize())
+    ax.set_title(f"Pareto Frontier: {y_col.capitalize()} vs {x_col.upper() if x_col == 'roi' else x_col.capitalize()}")
+    
+    # Add grid
+    ax.grid(True, linestyle='--', alpha=0.7)
+    
+    # Add legend
+    ax.legend(loc='best')
     
     plt.tight_layout()
     
-    # Save plot if output path provided
+    # Save figure if output_path provided
     if output_path:
-        plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Save figure
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Pareto frontier plot saved to {output_path}")
     
     return fig

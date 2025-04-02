@@ -1,129 +1,124 @@
 """
-Constants for regression scorecard modeling package.
+Constants for regression-based loan repayment rate prediction.
+
+This module provides constants for the scorecard regression package,
+including default parameters, excluded variables, and other configuration values.
 """
 
-# Import and extend constants from the original scorecard package
-from src.scorecard.constants import DATE_PATTERNS
+from sklearn.preprocessing import StandardScaler, RobustScaler, MinMaxScaler, MaxAbsScaler
 
-# Define variables that should be excluded from regression modeling
+# Variables that might leak information about the target
 EXCLUDE_VARS = [
-    # ID/identifier fields
     'client_id',
-    'duka_name',  # Store name is text
-    
-    # Date fields already handled by date column handling
-    'contract_start_date',
-    'month',
-    
-    # Categorical fields that need encoding before use
-    'Loan_Type',
-    'region',
-    'area',
-    'sales_territory',
-    'contract_day_name',
-    
-    # Time difference fields that may cause leakage
     'month_diff_contract_start_to_nov_23',
     'month_diff_contract_start_to_sept_23',
     'days_diff_contract_start_to_nov_23',
     'days_diff_contract_start_to_sept_23',
+    'cumulative_amount_paid',
+    'cumulative_amount_paid_start',
+    'diff_nov_23_to_sept_23_repayment_rate',
+    # 'nominal_contract_value',
+    'contract_start_date',
+    # These variables directly relate to or derive from the target
+    'sept_23_repayment_rate', 
+    'nov_23_repayment_rate',
     'months_since_start',
-    'days_since_start',
-    
-    # Target-related fields
-    'sept_23_repayment_rate',  # Target variable
-    'nov_23_repayment_rate',   # Alternative target
-    'diff_nov_23_to_sept_23_repayment_rate',  # Derived from targets
-    
-    # Boolean fields as strings
-    'is_weekend',
-    'coords_imputed'
+    'days_since_start'
 ]
 
-# Define regression-specific constants
-REGRESSION_TARGET_VARS = [
-    'sept_23_repayment_rate',
-    'nov_23_repayment_rate'
+# Date patterns to identify date-formatted columns
+DATE_PATTERNS = [
+    r'^\d{4}-\d{2}$',       # YYYY-MM
+    r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM-DD
+    r'^\d{2}/\d{2}/\d{4}$',  # MM/DD/YYYY
+    r'^\d{2}/\d{2}/\d{2}$',  # MM/DD/YY
+    r'^\d{2}-\d{2}-\d{4}$',  # DD-MM-YYYY
+    r'^\d{4}$'               # YYYY
 ]
 
-# Define regression model parameters
-DEFAULT_REGRESSION_PARAMS = {
-    'histgb': {
-        'max_depth': 3,
-        'learning_rate': 0.1,
-        'max_iter': 100,
-        'l2_regularization': 0.1
-    },
-    'linear': {
-        # LinearRegression doesn't use regularization parameters
-    },
-    'ridge': {
-        'alpha': 0.1
-    },
-    'lasso': {
-        'alpha': 0.1
-    },
-    'elasticnet': {
-        'alpha': 0.1,
-        'l1_ratio': 0.5
-    },
-    'xgboost': {
-        'max_depth': 3,
-        'learning_rate': 0.1,
-        'n_estimators': 100,
-        'reg_lambda': 1.0,
-        'reg_alpha': 0.0
-    },
-    'lightgbm': {
-        'max_depth': 3,
-        'learning_rate': 0.1,
-        'n_estimators': 100,
-        'reg_lambda': 1.0
-    },
-    'catboost': {
-        'depth': 3,
-        'learning_rate': 0.1,
-        'iterations': 100,
-        'l2_leaf_reg': 3.0
-    }
+# Default business parameters for profitability calculations
+DEFAULT_BUSINESS_PARAMS = {
+    'gross_margin': 0.16,  # 16% profit margin on repaid loan value
+    'default_loss_rate': 1.0,  # 100% loss on defaulted amount
+    'target_threshold': 0.8,  # Default threshold for good/bad classification
+    'operating_cost_per_loan': 0.0,  # Can be set to a value if applicable
+    'overhead_allocation': 0.0,  # Can be set to a value if applicable
+    'collection_cost_ratio': 0.0  # Cost of collection efforts as % of loan value
 }
 
-# Feature scaling settings
+# Dictionary of available scalers
 SCALING_METHODS = {
-    'robust': 'RobustScaler',
-    'standard': 'StandardScaler',
-    'minmax': 'MinMaxScaler',
-    'maxabs': 'MaxAbsScaler',
+    'standard': StandardScaler,
+    'robust': RobustScaler,
+    'minmax': MinMaxScaler,
+    'maxabs': MaxAbsScaler,
     'none': None
 }
 
-# Regression performance metrics
-REGRESSION_METRICS = [
-    'rmse',  # Root Mean Squared Error
-    'mae',   # Mean Absolute Error
-    'r2',    # Coefficient of Determination
-    'mse',   # Mean Squared Error
-    'mape',  # Mean Absolute Percentage Error
-    'ev'     # Explained Variance
-]
-
-# Profitability calculation constants
-GROSS_MARGIN = 0.16  # 16% based on OAF's gross margin
-
-# Define cutoff thresholds to evaluate
-DEFAULT_CUTOFF_THRESHOLDS = [0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.98]
-
-# Feature importance visualization settings
-SHAP_PLOT_SETTINGS = {
-    'max_display': 20,         # Maximum number of features to display
-    'plot_type': 'bar',        # Default plot type for summary
-    'cmap': 'coolwarm',        # Color map for SHAP values
-    'alpha': 0.8               # Transparency
+# Default parameters for regression models
+DEFAULT_REGRESSION_PARAMS = {
+    'linear': {},  # Default linear regression has no hyperparameters
+    'ridge': {
+        'alpha': 1.0,
+        'fit_intercept': True,
+        'random_state': 42
+    },
+    'lasso': {
+        'alpha': 0.01,
+        'fit_intercept': True,
+        'random_state': 42
+    },
+    'elasticnet': {
+        'alpha': 0.1,
+        'l1_ratio': 0.5,
+        'fit_intercept': True,
+        'random_state': 42
+    },
+    'histgb': {
+        'loss': 'squared_error',
+        'learning_rate': 0.1,
+        'max_depth': 3,
+        'min_samples_leaf': 10,
+        'n_estimators': 100,
+        'random_state': 42
+    },
+    'xgboost': {
+        'objective': 'reg:squarederror',
+        'learning_rate': 0.1,
+        'max_depth': 3,
+        'min_child_weight': 1,
+        'n_estimators': 100,
+        'random_state': 42
+    },
+    'lightgbm': {
+        'objective': 'regression',
+        'learning_rate': 0.1,
+        'max_depth': 3,
+        'num_leaves': 31,
+        'n_estimators': 100,
+        'random_state': 42
+    },
+    'catboost': {
+        'loss_function': 'RMSE',
+        'learning_rate': 0.1,
+        'depth': 3,
+        'iterations': 100,
+        'random_seed': 42,
+        'verbose': False
+    },
+    'rf': {
+        'n_estimators': 100,
+        'max_depth': 10,
+        'min_samples_split': 2,
+        'min_samples_leaf': 1,
+        'random_state': 42
+    }
 }
 
-# PDP plot settings
-PDP_PLOT_SETTINGS = {
-    'n_features': 10,          # Top features to create PDPs for
-    'grid_resolution': 20,     # Number of points in grid
-    'centered': True           # Center PDPs at zero
+# Variable selection parameters
+VARIABLE_SELECTION = {
+    'correlation_threshold': 0.8,  # Maximum correlation allowed between features
+    'vif_threshold': 10.0,  # Maximum Variance Inflation Factor allowed for features
+    'p_value_threshold': 0.05,  # Maximum p-value for statistical significance
+    'importance_threshold': 0.01  # Minimum feature importance to retain a feature
 }

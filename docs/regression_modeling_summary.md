@@ -53,7 +53,29 @@ The model maintained its excellent performance on the holdout data, confirming i
 
 ## Profitability Analysis
 
-The regression approach enables sophisticated profitability analysis by allowing various threshold comparisons:
+The regression approach enables sophisticated profitability analysis by allowing various threshold comparisons across different gross margins.
+
+### Cross-Analysis of Thresholds and Margins
+
+We conducted a comprehensive analysis of how different thresholds and gross margins affect various business metrics:
+
+#### Repayment Rate Across Thresholds and Margins
+![Repayment Rate Heatmap](../data/processed/margin_analysis/repayment_rate_heatmap.png)
+
+#### Default Rate Across Thresholds and Margins
+![Default Rate Heatmap](../data/processed/margin_analysis/default_rate_heatmap.png)
+
+#### Approval Rate Across Thresholds and Margins
+![Approval Rate Heatmap](../data/processed/margin_analysis/approval_rate_heatmap.png)
+
+#### Profit Across Thresholds and Margins
+![Profit Heatmap](../data/processed/margin_analysis/actual_profit_heatmap.png)
+
+#### Net Profit Margin Across Thresholds and Margins
+![Net Profit Margin Heatmap](../data/processed/margin_analysis/net_profit_margin_heatmap.png)
+
+#### Return on Investment Across Thresholds and Margins
+![ROI Heatmap](../data/processed/margin_analysis/return_on_investment_heatmap.png)
 
 ### Optimal Threshold (Training)
 - **Threshold**: 0.65
@@ -67,17 +89,20 @@ The regression approach enables sophisticated profitability analysis by allowing
 - **Actual Repayment Rate**: 0.79
 - **Total Profit**: 5,211,236 KES
 
-### Threshold Comparison
+### Threshold Comparison (30% Gross Margin)
 
-| Threshold | Approval Rate | Repayment Rate | Expected Loss |
-|-----------|---------------|----------------|---------------|
-| 0.65      | 29.1%         | 0.79           | 21%           |
-| 0.70      | 25.5%         | 0.81           | 19%           |
-| 0.75      | 22.4%         | 0.82           | 18%           |
-| 0.80      | 19.3%         | 0.84           | 16%           |
-| 0.85      | 15.9%         | 0.86           | 14%           |
-| 0.90      | 12.1%         | 0.88           | 12%           |
-| 0.95      | 7.8%          | 0.90           | 10%           |
+| Threshold | Approval Rate | Repayment Rate | Default Rate | Net Profit Margin | ROI     |
+|-----------|---------------|----------------|--------------|-------------------|---------|
+| 0.60      | 35.6%         | 76.0%          | 0.0%         | 22.8%             | -24.0%  |
+| 0.65      | 29.3%         | 78.8%          | 0.0%         | 23.6%             | -21.2%  |
+| 0.70      | 26.0%         | 80.3%          | 0.0%         | 24.1%             | -19.7%  |
+| 0.75      | 16.9%         | 85.4%          | 0.0%         | 25.6%             | -14.6%  |
+| 0.80      | 8.2%          | 90.5%          | 0.0%         | 27.2%             | -9.5%   |
+| 0.85      | 1.4%          | 95.7%          | 0.0%         | 28.7%             | -4.3%   |
+| 0.90      | 0.1%          | 98.5%          | 0.0%         | 29.5%             | -1.5%   |
+| 0.95      | 0.0%          | 98.7%          | 0.0%         | 29.6%             | -1.3%   |
+
+> **Note on Customer Lifetime Value**: This analysis does not factor in the customer lifetime value of repeat borrowers. Historically, repeat customers have a lower default rate, as they already value the lending facility. Including this factor would likely improve the profit metrics for lower thresholds that approve more loans.
 
 ## Expected Loss Calculation
 

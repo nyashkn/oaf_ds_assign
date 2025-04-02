@@ -23,8 +23,10 @@ pdpbox
 eli5
 lime
 
+# Fixed versions to avoid compatibility issues
 numba>=0.56.0
 llvmlite>=0.39.0
+
 # Additional ML algorithms
 xgboost
 lightgbm
@@ -36,11 +38,21 @@ pycebox
 
 # Development tools
 jupyter
+jupyterlab
 quarto
 jupyter-cache
 
 # Utilities
 python-dateutil
+pymupdf>=1.22.0
+pillow
 
 # Geolocation Package
 geopy
+
+# Agent-specific dependencies
+dotenv
+mcp
+mcpadapt
+smolagents[litellm]
+boto3>=1.34.0

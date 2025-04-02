@@ -1,494 +1,406 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
-Command-line utility to run regression-based loan repayment prediction
-with profitability analysis and optimization.
+Modular Regression-based Loan Repayment Rate Prediction Script
 
-Example usage:
-    python run_modular_regression.py --features data/processed/all_features.csv 
-                                    --target sept_23_repayment_rate 
-                                    --sample 1000 
-                                    --handle-dates exclude 
-                                    --handle-missing region_mean 
-                                    --region-col sales_territory 
-                                    --save-plots 
-                                    --optimizer bounded
+This script demonstrates the regression-based approach for predicting loan
+repayment rates as an alternative to binary classification. It provides a 
+side-by-side comparison of regression vs. classification approaches with
+profitability analysis at different thresholds.
 """
 
 import os
-import sys
 import argparse
 import pandas as pd
 import numpy as np
-import datetime
-from sklearn.model_selection import train_test_split
-from typing import Dict, List, Optional, Any
+import json
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 
-from src.scorecard_regression.constants import EXCLUDE_VARS
-from src.scorecard_regression.data_inspection import inspect_data, handle_date_like_columns
-from src.scorecard_regression.modeling_regression import develop_regression_model as fit_regression_model, predict_repayment_rate
-from src.scorecard_regression.evaluation import evaluate_regression_performance
-from src.scorecard_regression.utils import create_version_path
-from src.scorecard_regression.profitability import (
+# Import the scorecard regression package
+from src.scorecard_regression import (
+    # Utils and constants
+    create_version_path,
+    EXCLUDE_VARS,
+    DEFAULT_REGRESSION_PARAMS,
+    
+    # Data preparation
+    exclude_leakage_variables,
+    partition_data,
+    check_multicollinearity,
+    select_significant_variables,
+    
+    # Modeling
+    train_regression_model,
+    evaluate_regression_model,
+    cross_validate_regression,
+    compare_regression_vs_classification,
+    
+    # Profitability analysis
     analyze_multiple_thresholds,
-    find_optimal_threshold,
-    advanced_profit_optimization,
-    plot_threshold_performance,
-    plot_profit_metrics,
-    plot_optimization_results,
-    plot_pareto_frontier
+    analyze_cutoff_tradeoffs,
+    calculate_business_metrics
 )
 
-def run_modular_regression(
-    features_path: str,
-    target_var: str,
-    output_base_path: str = "data/processed/regression_modelling",
-    sample_size: Optional[int] = None,
-    test_size: float = 0.3,
-    handle_date_columns: str = 'exclude',  # 'exclude', 'convert_to_categorical', or 'parse_date'
-    handle_missing: str = 'mean',  # 'mean', 'median', 'mode', 'drop', or 'region_mean'
-    region_col: Optional[str] = None,  # Column name containing region information
-    save_plots: bool = False,
-    model_type: str = 'linear',  # 'linear', 'ridge', 'lasso', 'elasticnet', 'randomforest', 'gbr', 'histgb'
-    model_params: Optional[Dict[str, Any]] = None,
-    thresholds: Optional[List[float]] = None,
-    optimizer: str = None,  # None, 'bounded', 'brent', 'golden', 'advanced'
-    gross_margin: float = 0.3,
-    random_state: int = 42
-) -> Dict[str, Any]:
-    """
-    Run the full modular regression modeling workflow with profitability analysis.
+def parse_arguments():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description='OAF Loan Repayment Rate Regression Modeling')
     
-    Args:
-        features_path: Path to features CSV file
-        target_var: Name of target variable
-        output_base_path: Base path for output files
-        sample_size: Optional sample size for testing
-        test_size: Fraction of data to use for testing
-        handle_date_columns: How to handle date-like columns 
-        handle_missing: How to handle missing values
-        region_col: Column name containing region information
-        save_plots: Whether to save plots
-        model_type: Type of regression model
-        model_params: Additional parameters for the model
-        thresholds: List of repayment rate thresholds to evaluate
-        optimizer: Optimization method for finding optimal threshold
-        gross_margin: Gross margin percentage
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Dictionary with paths to all outputs
-    """
-    print(f"[INFO] Starting modular regression modeling workflow...")
-    print(f"Target variable: {target_var}")
-    print(f"Features path: {features_path}")
-    
-    # Create version directory
-    version_path = create_version_path(output_base_path)
-    
-    # Step 1: Load and inspect data
-    print(f"\n[STEP 1] Loading and inspecting data...")
-    df = pd.read_csv(features_path)
-    
-    if sample_size is not None and sample_size < len(df):
-        df = df.sample(n=sample_size, random_state=random_state)
-        print(f"Using sample of {sample_size} loans for testing")
-    
-    # Inspect data
-    inspection_path = os.path.join(version_path, "1_data_inspection.json")
-    inspection_results = inspect_data(df, target_var, inspection_path)
-    
-    # Step 2: Handle date-like columns
-    print(f"\n[STEP 2] Handling date-like columns...")
-    date_handling_path = os.path.join(version_path, "2_date_handling.json")
-    df = handle_date_like_columns(
-        df, 
-        inspection_results.get("date_like_columns", []),
-        method=handle_date_columns,
-        output_path=date_handling_path
-    )
-    
-    # Step 3: Drop excluded columns (including non-numeric ones)
-    print(f"\n[STEP 3] Preprocessing data...")
-    if target_var not in df.columns:
-        raise ValueError(f"Target variable '{target_var}' not found in dataframe")
-    
-    # Get columns to exclude (from constants.py)
-    exclude_cols = [col for col in EXCLUDE_VARS if col in df.columns and col != target_var]
-    
-    if exclude_cols:
-        print(f"Excluding {len(exclude_cols)} columns: {', '.join(exclude_cols[:5])}{'...' if len(exclude_cols) > 5 else ''}")
-        df = df.drop(columns=exclude_cols)
-    
-    # Handle missing values
-    # First, check for missing values
-    missing_cols = []
-    for col in df.columns:
-        if col != target_var and df[col].isna().any():
-            missing_cols.append((col, df[col].isna().sum()))
-    
-    if missing_cols:
-        print("\nHandling missing values...")
-        print(f"Found {len(missing_cols)} columns with missing values:")
-        for col, count in sorted(missing_cols, key=lambda x: x[1], reverse=True)[:5]:
-            print(f"  {col}: {count} missing values")
-        
-        if handle_missing == 'drop':
-            # Drop rows with any missing values
-            original_count = len(df)
-            df = df.dropna()
-            print(f"Dropped {original_count - len(df)} rows with missing values")
-        else:
-            # Impute missing values
-            for col in df.columns:
-                if col != target_var and df[col].isna().any():
-                    if handle_missing == 'mean':
-                        fill_value = df[col].mean()
-                        method = 'mean'
-                    elif handle_missing == 'median':
-                        fill_value = df[col].median()
-                        method = 'median'
-                    elif handle_missing == 'mode':
-                        fill_value = df[col].mode()[0]
-                        method = 'mode'
-                    elif handle_missing == 'region_mean' and region_col and region_col in df.columns:
-                        # Special case for region-based imputation
-                        print(f"  Using region-based imputation for {col}")
-                        for region in df[region_col].unique():
-                            mask = (df[region_col] == region) & df[col].isna()
-                            if mask.any():
-                                region_mean = df[df[region_col] == region][col].mean()
-                                df.loc[mask, col] = region_mean
-                        method = 'region mean'
-                        continue
-                    else:
-                        # Default to mean
-                        fill_value = df[col].mean()
-                        method = 'mean'
-                    
-                    # Apply imputation
-                    df[col] = df[col].fillna(fill_value)
-                    print(f"  Filled {col} missing values with {method}")
-    
-    # Split into features and target
-    features = df.drop(columns=[target_var])
-    target = df[target_var]
-    
-    # Step 4: Split data into training and testing sets
-    print(f"\n[STEP 4] Splitting data into training and testing sets...")
-    
-    X_train, X_test, y_train, y_test = train_test_split(
-        features, target, test_size=test_size, random_state=random_state
-    )
-    
-    print(f"Training set: {X_train.shape[0]} samples")
-    print(f"Testing set: {X_test.shape[0]} samples")
-    
-    # Save train/test split
-    split_dir = os.path.join(version_path, "3_train_test_split")
-    os.makedirs(split_dir, exist_ok=True)
-    
-    pd.concat([X_train, y_train], axis=1).to_csv(
-        os.path.join(split_dir, "train.csv"), index=False)
-    pd.concat([X_test, y_test], axis=1).to_csv(
-        os.path.join(split_dir, "test.csv"), index=False)
-    
-    # Step 4: Train regression model
-    print(f"\n[STEP 4] Training regression model ({model_type})...")
-    model_dir = os.path.join(version_path, "4_regression_model")
-    
-    if model_params is None:
-        model_params = {}
-    
-    # Create training and test dataframes with target for the modeling function
-    train_df = pd.concat([X_train, pd.Series(y_train, name=target_var)], axis=1)
-    test_df = pd.concat([X_test, pd.Series(y_test, name=target_var)], axis=1)
-    
-    # Call the modeling function
-    model_results = fit_regression_model(
-        train_df, 
-        test_df,
-        target_var,
-        output_dir=model_dir,
-        model_type=model_type,
-        model_params=model_params,
-        random_state=random_state
-    )
-    
-    # Extract the model from results
-    model = model_results['model']
-    feature_importance = model_results.get('feature_importances')
-    
-    # Step 5: Make predictions
-    print(f"\n[STEP 5] Making predictions...")
-    predictions_dir = os.path.join(version_path, "5_predictions")
-    os.makedirs(predictions_dir, exist_ok=True)
-    
-    # Get predictions directly from model
-    y_train_pred = model.predict(X_train)
-    train_predictions = pd.DataFrame({
-        'actual': y_train,
-        'predicted': y_train_pred
-    })
-    
-    # Get predictions directly from model
-    y_test_pred = model.predict(X_test)
-    test_predictions = pd.DataFrame({
-        'actual': y_test,
-        'predicted': y_test_pred
-    })
-    
-    # Add loan amount if available
-    loan_amount_col = 'nominal_contract_value'
-    if loan_amount_col in X_train.columns:
-        train_predictions[loan_amount_col] = X_train[loan_amount_col].values
-        test_predictions[loan_amount_col] = X_test[loan_amount_col].values
-    
-    # Save predictions
-    train_predictions.to_csv(os.path.join(predictions_dir, "train_predictions.csv"), index=False)
-    test_predictions.to_csv(os.path.join(predictions_dir, "test_predictions.csv"), index=False)
-    
-    # Step 6: Evaluate model
-    print(f"\n[STEP 6] Evaluating regression model...")
-    evaluation_dir = os.path.join(version_path, "6_model_evaluation")
-    
-    evaluation_results = evaluate_regression_performance(
-        y_train, y_test, y_train_pred, y_test_pred,
-        output_dir=evaluation_dir if save_plots else None
-    )
-    
-    # Step 7: Profitability analysis with multiple thresholds
-    print(f"\n[STEP 7] Performing profitability analysis...")
-    profitability_dir = os.path.join(version_path, "7_profitability_analysis")
-    os.makedirs(profitability_dir, exist_ok=True)
-    
-    # Use test predictions for profitability analysis
-    if thresholds is None:
-        thresholds = [0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
-    
-    threshold_dir = os.path.join(profitability_dir, "threshold_analysis")
-    os.makedirs(threshold_dir, exist_ok=True)
-    
-    threshold_results = analyze_multiple_thresholds(
-        test_predictions,
-        thresholds=thresholds,
-        predicted_col='predicted',
-        actual_col='actual',
-        loan_amount_col=loan_amount_col if loan_amount_col in test_predictions.columns else None,
-        gross_margin=gross_margin,
-        output_dir=threshold_dir
-    )
-    
-    if save_plots:
-        # Plot threshold performance
-        plot_threshold_performance(
-            threshold_results['threshold_df'],
-            threshold_results['optimal_threshold'],
-            output_path=os.path.join(threshold_dir, "threshold_performance.png")
-        )
-        
-        # Plot profit metrics
-        plot_profit_metrics(
-            threshold_results['threshold_df'],
-            threshold_results['optimal_threshold'],
-            output_path=os.path.join(threshold_dir, "profit_metrics.png")
-        )
-    
-    # Step 8: Optimization (if requested)
-    if optimizer:
-        print(f"\n[STEP 8] Performing threshold optimization ({optimizer})...")
-        optimization_dir = os.path.join(profitability_dir, "optimization")
-        os.makedirs(optimization_dir, exist_ok=True)
-        
-        if optimizer == 'advanced':
-            # Run multi-objective optimization
-            alpha_values = [0.1, 0.25, 0.5, 0.75, 0.9]
-            opt_results = advanced_profit_optimization(
-                test_predictions,
-                predicted_col='predicted',
-                actual_col='actual',
-                loan_amount_col=loan_amount_col if loan_amount_col in test_predictions.columns else None,
-                gross_margin=gross_margin,
-                alpha_values=alpha_values,
-                output_dir=optimization_dir
-            )
-            
-            if save_plots:
-                # Plot Pareto frontier
-                plot_pareto_frontier(
-                    opt_results['pareto_frontier'],
-                    output_path=os.path.join(optimization_dir, "pareto_frontier.png")
-                )
-                
-            # Save results summary
-            with open(os.path.join(optimization_dir, "optimization_summary.txt"), 'w') as f:
-                f.write(f"Multi-objective Optimization Results\n")
-                f.write(f"==================================\n\n")
-                
-                for alpha, result in opt_results['results'].items():
-                    if 'optimal_threshold' in result:
-                        f.write(f"Alpha: {result['alpha']:.2f}\n")
-                        f.write(f"Optimal threshold: {result['optimal_threshold']:.4f}\n")
-                        f.write(f"Total profit: {result['total_profit']:.2f}\n")
-                        f.write(f"Money left on table: {result['money_left_on_table']:.2f}\n")
-                        f.write(f"Approval rate: {result['approval_rate']:.2%}\n\n")
-        else:
-            # Run single-objective optimization
-            opt_results = find_optimal_threshold(
-                test_predictions,
-                predicted_col='predicted',
-                actual_col='actual',
-                loan_amount_col=loan_amount_col if loan_amount_col in test_predictions.columns else None,
-                gross_margin=gross_margin,
-                metric='total_actual_profit',
-                method=optimizer,
-                output_dir=optimization_dir
-            )
-            
-            if save_plots:
-                # Plot optimization results
-                plot_optimization_results(
-                    opt_results,
-                    output_path=os.path.join(optimization_dir, "optimization_results.png")
-                )
-                
-            # Save optimized result to main directory for easy reference
-            with open(os.path.join(profitability_dir, "optimal_threshold.txt"), 'w') as f:
-                f.write(f"Optimal threshold: {opt_results['optimal_threshold']:.4f}\n")
-                f.write(f"Optimization method: {optimizer}\n")
-                f.write(f"Actual repayment rate: {opt_results['loan_metrics']['actual_repayment_rate']:.4f}\n")
-                f.write(f"Total profit: {opt_results['profit_metrics']['total_actual_profit']:.2f}\n")
-                f.write(f"Approval rate: {opt_results['loan_metrics']['n_approved']/opt_results['loan_metrics']['total_loans']:.2%}\n")
-    
-    # Create summary report
-    summary = {
-        'version_path': version_path,
-        'date': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'target_variable': target_var,
-        'sample_size': len(df) if sample_size is None else sample_size,
-        'model_type': model_type,
-        'model_params': model_params,
-        'performance': {
-            'train_r2': float(evaluation_results['train_metrics']['r2']),
-            'test_r2': float(evaluation_results['test_metrics']['r2']),
-            'train_mae': float(evaluation_results['train_metrics']['mae']),
-            'test_mae': float(evaluation_results['test_metrics']['mae']),
-            'train_rmse': float(evaluation_results['train_metrics']['rmse']),
-            'test_rmse': float(evaluation_results['test_metrics']['rmse'])
-        }
-    }
-    
-    # Add profitability metrics
-    if threshold_results and 'optimal_threshold' in threshold_results:
-        summary['profitability'] = {
-            'optimal_threshold_grid': float(threshold_results['optimal_threshold']),
-            'approval_rate': float(threshold_results['threshold_df'].loc[
-                threshold_results['threshold_df']['threshold'] == threshold_results['optimal_threshold'], 
-                'approval_rate'
-            ].values[0]),
-            'actual_repayment_rate': float(threshold_results['threshold_df'].loc[
-                threshold_results['threshold_df']['threshold'] == threshold_results['optimal_threshold'], 
-                'actual_repayment_rate'
-            ].values[0])
-        }
-    
-    # Add optimization results if available
-    if optimizer and 'opt_results' in locals() and 'optimal_threshold' in opt_results:
-        if 'profitability' not in summary:
-            summary['profitability'] = {}
-        
-        summary['profitability']['optimal_threshold_' + optimizer] = float(opt_results['optimal_threshold'])
-    
-    # Save summary report
-    summary_path = os.path.join(version_path, "summary.json")
-    import json
-    with open(summary_path, 'w') as f:
-        json.dump(summary, f, indent=2)
-    
-    print(f"\n[SUCCESS] Regression modeling with profitability analysis complete!")
-    print(f"Results saved to {version_path}")
-    print(f"Summary report saved to {summary_path}")
-    
-    # Return paths to outputs
-    return {
-        'version_path': version_path,
-        'summary': summary,
-        'data_inspection': inspection_path,
-        'train_test_split': split_dir,
-        'regression_model': model_dir,
-        'predictions': predictions_dir,
-        'model_evaluation': evaluation_dir,
-        'profitability_analysis': profitability_dir
-    }
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Regression Modeling with Profitability Analysis')
+    # Data parameters
     parser.add_argument('--features', type=str, default="data/processed/all_features.csv",
                        help='Path to features CSV file')
     parser.add_argument('--target', type=str, default='sept_23_repayment_rate',
-                       help='Target variable name')
+                       help='Target variable name (continuous repayment rate)')
+    parser.add_argument('--id-col', type=str, default='client_id',
+                       help='ID column name')
+    parser.add_argument('--loan-value-col', type=str, default='nominal_contract_value',
+                       help='Column containing loan amounts for profitability calculations')
+    
+    # Sampling and partitioning
     parser.add_argument('--sample', type=int, default=None,
-                       help='Sample size for testing')
-    parser.add_argument('--test-size', type=float, default=0.3,
-                       help='Fraction of data to use for testing')
+                       help='Sample size for testing (use None for full dataset)')
+    parser.add_argument('--stratify', action='store_true',
+                       help='Use stratified sampling for data partitioning')
+    parser.add_argument('--validation', action='store_true',
+                       help='Include validation set in addition to train/test')
+    
+    # Feature selection
+    parser.add_argument('--correlation-threshold', type=float, default=0.1,
+                       help='Minimum correlation to keep a feature')
+    parser.add_argument('--importance-threshold', type=float, default=0.01,
+                       help='Minimum importance to keep a feature')
+    
+    # Model parameters
+    parser.add_argument('--reg-model', type=str, default='histgb',
+                       choices=['linear', 'ridge', 'lasso', 'elasticnet', 'histgb', 'xgboost', 'lightgbm', 'catboost', 'rf'],
+                       help='Regression model type')
+    parser.add_argument('--clf-model', type=str, default='histgb',
+                       choices=['logistic', 'histgb', 'rf'],
+                       help='Classification model type for comparison')
+    parser.add_argument('--model-params', type=str, default=None,
+                       help='Model parameters as JSON string')
+    
+    # Profitability analysis
+    parser.add_argument('--margin', type=float, default=0.16,
+                       help='Gross margin as decimal (e.g., 0.16 = 16%%)')
+    parser.add_argument('--default-loss-rate', type=float, default=1.0,
+                       help='Loss rate on defaulted loans (1.0 = 100%%)')
+    parser.add_argument('--thresholds', type=str, default=None,
+                       help='Comma-separated list of thresholds to analyze (e.g., "0.7,0.75,0.8,0.85,0.9")')
+    
+    # Output parameters
     parser.add_argument('--output', type=str, default="data/processed/regression_modelling",
                        help='Base path for output files')
-    parser.add_argument('--handle-dates', type=str, choices=['exclude', 'convert_to_categorical', 'parse_date'],
-                       default='exclude', help='How to handle date-like columns')
-    parser.add_argument('--handle-missing', type=str, choices=['mean', 'median', 'mode', 'drop', 'region_mean'],
-                       default='mean', help='How to handle missing values')
-    parser.add_argument('--region-col', type=str, default=None,
-                       help='Column name containing region information')
-    parser.add_argument('--save-plots', action='store_true',
-                       help='Whether to save plots')
-    parser.add_argument('--model', type=str, choices=['linear', 'ridge', 'lasso', 'elasticnet', 'randomforest', 'gbr', 'histgb'],
-                       default='linear', help='Type of regression model')
-    parser.add_argument('--model-params', type=str, default=None,
-                       help='JSON string with model parameters')
-    parser.add_argument('--thresholds', type=str, default=None,
-                       help='Comma-separated list of thresholds to evaluate (e.g., "0.7,0.75,0.8,0.85,0.9")')
-    parser.add_argument('--optimizer', type=str, choices=['bounded', 'brent', 'golden', 'advanced'],
-                       default=None, help='Optimization method for finding optimal threshold')
-    parser.add_argument('--gross-margin', type=float, default=0.3,
-                       help='Gross margin percentage')
-    parser.add_argument('--random-state', type=int, default=42,
-                       help='Random seed for reproducibility')
+    parser.add_argument('--plots', action='store_true',
+                       help='Generate and save plots')
+    parser.add_argument('--cross-validate', action='store_true',
+                       help='Perform cross-validation')
+    parser.add_argument('--folds', type=int, default=5,
+                       help='Number of cross-validation folds')
     
-    args = parser.parse_args()
+    return parser.parse_args()
+
+def main():
+    """Run the main regression modeling workflow."""
+    args = parse_arguments()
     
-    # Parse model parameters
+    print("=" * 80)
+    print("OAF Loan Repayment Rate Regression Modeling")
+    print("=" * 80)
+    
+    # Create version directory
+    version_path = create_version_path(args.output)
+    print(f"Results will be saved to: {version_path}")
+    
+    # Parse model parameters if provided
     model_params = None
     if args.model_params:
-        import json
         try:
             model_params = json.loads(args.model_params)
+            print(f"Using custom model parameters: {model_params}")
         except json.JSONDecodeError:
-            print(f"Error: Invalid JSON for model parameters: {args.model_params}")
-            sys.exit(1)
+            print(f"Warning: Could not parse model parameters: {args.model_params}")
+            print("Using default parameters instead.")
     
-    # Parse thresholds
+    # Parse thresholds if provided
     thresholds = None
     if args.thresholds:
         try:
             thresholds = [float(t) for t in args.thresholds.split(',')]
+            print(f"Using custom thresholds: {thresholds}")
         except ValueError:
-            print(f"Error: Invalid threshold values: {args.thresholds}")
-            sys.exit(1)
+            print(f"Warning: Could not parse thresholds: {args.thresholds}")
+            print("Using default thresholds instead.")
     
-    # Run the modeling workflow
-    run_modular_regression(
-        features_path=args.features,
-        target_var=args.target,
-        output_base_path=args.output,
-        sample_size=args.sample,
-        test_size=args.test_size,
-        handle_date_columns=args.handle_dates,
-        handle_missing=args.handle_missing,
-        region_col=args.region_col,
-        save_plots=args.save_plots,
-        model_type=args.model,
-        model_params=model_params,
-        thresholds=thresholds,
-        optimizer=args.optimizer,
-        gross_margin=args.gross_margin,
-        random_state=args.random_state
+    # Step 1: Load and inspect data
+    print("\n[STEP 1] Loading and preparing data...")
+    try:
+        df = pd.read_csv(args.features)
+        print(f"Loaded data from {args.features}: {df.shape[0]} rows, {df.shape[1]} columns")
+        
+        # Apply sampling if requested
+        if args.sample and args.sample < len(df):
+            df = df.sample(n=args.sample, random_state=42)
+            print(f"Using sample of {args.sample} loans")
+        
+        # Make a copy of loan value for later use
+        loan_values = df[args.loan_value_col].copy() if args.loan_value_col in df.columns else None
+        if loan_values is None:
+            print(f"Warning: Loan value column '{args.loan_value_col}' not found. Profitability metrics will use a default value.")
+            loan_values = np.ones(len(df))
+        
+        # Get target variable
+        if args.target not in df.columns:
+            raise ValueError(f"Target variable '{args.target}' not found in data")
+        y = df[args.target].copy()
+        print(f"Target variable '{args.target}' statistics:")
+        print(f"  Mean: {y.mean():.4f}")
+        print(f"  Std: {y.std():.4f}")
+        print(f"  Min: {y.min():.4f}")
+        print(f"  Max: {y.max():.4f}")
+        
+        # Save ID column if present
+        id_col = df[args.id_col].copy() if args.id_col in df.columns else None
+    except Exception as e:
+        print(f"Error loading data: {str(e)}")
+        return
+    
+    # Step 2: Exclude leakage variables
+    print("\n[STEP 2] Excluding leakage variables...")
+    filtered_df, excluded = exclude_leakage_variables(
+        df, 
+        args.target, 
+        output_path=os.path.join(version_path, "data", "filtered_data.csv")
     )
+    
+    # Step 3: Perform multicollinearity check
+    print("\n[STEP 3] Checking for multicollinearity...")
+    multicollinearity_results = check_multicollinearity(
+        filtered_df.drop(columns=[args.target]),
+        output_path=os.path.join(version_path, "data", "multicollinearity_results.json")
+    )
+    
+    # Step 4: Partition data
+    print("\n[STEP 4] Partitioning data...")
+    partitioned_data = partition_data(
+        filtered_df,
+        args.target,
+        include_validation=args.validation,
+        stratify=args.stratify,
+        output_dir=os.path.join(version_path, "data", "partition")
+    )
+    
+    # Step 5: Variable selection
+    print("\n[STEP 5] Selecting significant variables...")
+    selection_results = select_significant_variables(
+        partitioned_data['train'].drop(columns=[args.target]), 
+        partitioned_data['train'][args.target],
+        correlation_threshold=args.correlation_threshold,
+        importance_threshold=args.importance_threshold,
+        output_dir=os.path.join(version_path, "data", "variable_selection")
+    )
+    
+    # Use selected features
+    selected_features = selection_results['selected_features']
+    print(f"Selected {len(selected_features)} features for modeling")
+    
+    # Prepare datasets with selected features
+    X_train = partitioned_data['train'][selected_features]
+    y_train = partitioned_data['train'][args.target]
+    X_test = partitioned_data['test'][selected_features]
+    y_test = partitioned_data['test'][args.target]
+    
+    # Save test set loan values for later profitability analysis
+    test_loan_values = loan_values.loc[partitioned_data['test'].index] if hasattr(loan_values, 'loc') else loan_values[partitioned_data['test'].index]
+    
+    # Optional: Cross-validation
+    if args.cross_validate:
+        print("\n[STEP 6] Performing cross-validation...")
+        cv_results = cross_validate_regression(
+            X_train, 
+            y_train,
+            model_type=args.reg_model,
+            model_params=model_params,
+            n_folds=args.folds,
+            output_dir=os.path.join(version_path, "models", "cross_validation")
+        )
+    
+    # Step 6/7: Train regression model
+    print(f"\n[STEP {'7' if args.cross_validate else '6'}] Training regression model...")
+    model_result = train_regression_model(
+        X_train,
+        y_train,
+        model_type=args.reg_model,
+        model_params=model_params,
+        output_dir=os.path.join(version_path, "models", "regression")
+    )
+    
+    # Step 7/8: Evaluate regression model
+    print(f"\n[STEP {'8' if args.cross_validate else '7'}] Evaluating regression model...")
+    eval_result = evaluate_regression_model(
+        model_result['model'],
+        X_test,
+        y_test,
+        output_dir=os.path.join(version_path, "metrics", "regression")
+    )
+    
+    # Get regression predictions for threshold analysis
+    reg_predictions = eval_result['predictions']
+    
+    # Step 8/9: Train classification model for comparison
+    print(f"\n[STEP {'9' if args.cross_validate else '8'}] Training classification model for comparison...")
+    # Create binary target for classification
+    binary_target_train = (y_train >= 0.8).astype(int)
+    binary_target_test = (y_test >= 0.8).astype(int)
+    
+    # Choose classifier based on args.clf_model
+    if args.clf_model == 'logistic':
+        clf = LogisticRegression(random_state=42)
+    elif args.clf_model == 'histgb':
+        clf = GradientBoostingClassifier(random_state=42)
+    else:  # rf
+        clf = RandomForestClassifier(random_state=42)
+    
+    # Fit classifier
+    clf.fit(X_train, binary_target_train)
+    
+    # Get probabilities and accuracy
+    clf_probas = clf.predict_proba(X_test)[:, 1]
+    clf_preds = clf.predict(X_test)
+    clf_accuracy = accuracy_score(binary_target_test, clf_preds)
+    clf_auc = roc_auc_score(binary_target_test, clf_probas)
+    
+    print(f"Classification model results:")
+    print(f"  Accuracy: {clf_accuracy:.4f}")
+    print(f"  AUC: {clf_auc:.4f}")
+    
+    # Step 9/10: Compare regression and classification approaches
+    print(f"\n[STEP {'10' if args.cross_validate else '9'}] Comparing regression and classification approaches...")
+    comparison_result = compare_regression_vs_classification(
+        y_test,
+        reg_predictions,
+        clf_probas,
+        test_loan_values,
+        thresholds=thresholds,
+        margin=args.margin,
+        default_loss_rate=args.default_loss_rate,
+        output_dir=os.path.join(version_path, "metrics", "comparison")
+    )
+    
+    # Step 10/11: Perform detailed threshold analysis for regression model
+    print(f"\n[STEP {'11' if args.cross_validate else '10'}] Performing threshold analysis...")
+    threshold_results = analyze_cutoff_tradeoffs(
+        y_test,
+        reg_predictions,
+        test_loan_values,
+        thresholds=thresholds,
+        business_params={
+            'margin': args.margin,
+            'default_loss_rate': args.default_loss_rate
+        },
+        output_path=os.path.join(version_path, "metrics", "threshold_analysis.json")
+    )
+    
+    # Extract optimal thresholds for different objectives
+    profit_threshold = threshold_results['recommendations']['profit_focused']
+    roi_threshold = threshold_results['recommendations']['roi_focused']
+    balanced_threshold = threshold_results['recommendations']['balanced']
+    
+    # Calculate business metrics using optimal thresholds
+    profit_metrics = calculate_business_metrics(
+        y_test,
+        reg_predictions,
+        test_loan_values,
+        threshold=profit_threshold,
+        margin=args.margin,
+        default_loss_rate=args.default_loss_rate
+    )
+    
+    roi_metrics = calculate_business_metrics(
+        y_test,
+        reg_predictions,
+        test_loan_values,
+        threshold=roi_threshold,
+        margin=args.margin,
+        default_loss_rate=args.default_loss_rate
+    )
+    
+    balanced_metrics = calculate_business_metrics(
+        y_test,
+        reg_predictions,
+        test_loan_values,
+        threshold=balanced_threshold,
+        margin=args.margin,
+        default_loss_rate=args.default_loss_rate
+    )
+    
+    # Print summary of optimal thresholds
+    print("\nOptimal thresholds for regression model:")
+    print(f"  Profit-focused: {profit_threshold:.2f}")
+    print(f"    Approval rate: {profit_metrics['loan_metrics']['n_loans']['approval_rate']:.1%}")
+    print(f"    Profit: {profit_metrics['profit_metrics']['actual_profit']:.2f}")
+    print(f"    ROI: {profit_metrics['profit_metrics']['roi']:.1%}")
+    
+    print(f"\n  ROI-focused: {roi_threshold:.2f}")
+    print(f"    Approval rate: {roi_metrics['loan_metrics']['n_loans']['approval_rate']:.1%}")
+    print(f"    Profit: {roi_metrics['profit_metrics']['actual_profit']:.2f}")
+    print(f"    ROI: {roi_metrics['profit_metrics']['roi']:.1%}")
+    
+    print(f"\n  Balanced: {balanced_threshold:.2f}")
+    print(f"    Approval rate: {balanced_metrics['loan_metrics']['n_loans']['approval_rate']:.1%}")
+    print(f"    Profit: {balanced_metrics['profit_metrics']['actual_profit']:.2f}")
+    print(f"    ROI: {balanced_metrics['profit_metrics']['roi']:.1%}")
+    
+    # Save summary
+    summary = {
+        'version_path': version_path,
+        'input_file': args.features,
+        'target_variable': args.target,
+        'regression_model': args.reg_model,
+        'regression_metrics': eval_result['test_metrics'],
+        'classification_model': args.clf_model,
+        'classification_metrics': {
+            'accuracy': float(clf_accuracy),
+            'auc': float(clf_auc)
+        },
+        'optimal_thresholds': {
+            'profit_focused': float(profit_threshold),
+            'roi_focused': float(roi_threshold),
+            'balanced': float(balanced_threshold)
+        },
+        'profit_metrics': {
+            'approval_rate': float(profit_metrics['loan_metrics']['n_loans']['approval_rate']),
+            'profit': float(profit_metrics['profit_metrics']['actual_profit']),
+            'roi': float(profit_metrics['profit_metrics']['roi'])
+        },
+        'roi_metrics': {
+            'approval_rate': float(roi_metrics['loan_metrics']['n_loans']['approval_rate']),
+            'profit': float(roi_metrics['profit_metrics']['actual_profit']),
+            'roi': float(roi_metrics['profit_metrics']['roi'])
+        },
+        'comparison': {
+            'regression_vs_classification': {
+                'profit_difference': {
+                    'absolute': float(comparison_result['performance_difference']['profit']['absolute']),
+                    'relative': float(comparison_result['performance_difference']['profit']['relative'])
+                },
+                'roi_difference': {
+                    'absolute': float(comparison_result['performance_difference']['roi']['absolute']),
+                    'relative': float(comparison_result['performance_difference']['roi']['relative'])
+                }
+            }
+        }
+    }
+    
+    # Save summary
+    summary_path = os.path.join(version_path, "summary.json")
+    with open(summary_path, 'w') as f:
+        json.dump(summary, f, indent=2)
+    
+    print(f"\nAnalysis complete. Results saved to {version_path}")
+    print(f"Summary saved to {summary_path}")
+
+if __name__ == "__main__":
+    main()

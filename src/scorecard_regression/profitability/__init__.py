@@ -1,10 +1,11 @@
 """
-Profitability analysis functions for regression-based loan repayment prediction.
+Profitability analysis subpackage for loan repayment rate prediction.
 
-This package provides tools to analyze the profitability and business implications
-of different repayment rate thresholds, with a focus on optimization.
+This subpackage provides tools and utilities for analyzing the profitability
+of loan approval decisions based on predicted repayment rates.
 """
 
+# Import metrics functions
 from .metrics import (
     calculate_loan_metrics,
     calculate_profit_metrics,
@@ -12,18 +13,21 @@ from .metrics import (
     calculate_business_metrics
 )
 
+# Import threshold analysis functions
 from .threshold_analysis import (
     analyze_threshold,
     analyze_multiple_thresholds,
     analyze_cutoff_tradeoffs
 )
 
+# Import optimization functions
 from .optimization import (
     find_optimal_threshold,
     profit_function,
     advanced_profit_optimization
 )
 
+# Import visualization functions
 from .visualization import (
     plot_threshold_performance,
     plot_profit_metrics,
@@ -33,24 +37,25 @@ from .visualization import (
     plot_pareto_frontier
 )
 
+# Define what gets imported with "from scorecard_regression.profitability import *"
 __all__ = [
-    # Metrics functions
+    # Metrics
     'calculate_loan_metrics',
     'calculate_profit_metrics',
     'calculate_classification_metrics',
     'calculate_business_metrics',
     
-    # Threshold analysis functions
+    # Threshold analysis
     'analyze_threshold',
     'analyze_multiple_thresholds',
     'analyze_cutoff_tradeoffs',
     
-    # Optimization functions
+    # Optimization
     'find_optimal_threshold',
     'profit_function',
     'advanced_profit_optimization',
     
-    # Visualization functions
+    # Visualization
     'plot_threshold_performance',
     'plot_profit_metrics',
     'plot_confusion_matrix',
