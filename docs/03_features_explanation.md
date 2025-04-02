@@ -9,7 +9,7 @@
 | Performance | sept_23_repayment_rate | Repayment rate as of Sept 2023 |
 | | nov_23_repayment_rate | Repayment rate as of Nov 2023 |
 | | diff_nov_23_to_sept_23_repayment_rate | Change in repayment rate |
-| | cumulative_amount_paid_start | Initial cumulative amount paid |
+| | cumulative_amount_paid_start | Paid amount by Sept 2023 |
 | Geographic | region | Geographic region |
 | | area | Sub-region area |
 | | sales_territory | Sales territory |

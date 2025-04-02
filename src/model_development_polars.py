@@ -361,14 +361,121 @@ def calculate_temporal_features(df: pl.DataFrame) -> pl.DataFrame:
     print("Temporal features calculation complete")
     return df
 
-def engineer_features(df_pandas: pd.DataFrame, sample_size: Optional[int] = None) -> pd.DataFrame:
+def calculate_post_sept_metrics(df: pl.DataFrame, is_holdout: bool = False) -> pl.DataFrame:
+    """
+    Calculate metrics using post-application September data.
+    These features are prefixed with 'post_' to clearly indicate they are
+    post-application features that weren't available at loan decision time
+    and should only be used for analysis, not in production models.
+    
+    Args:
+        df: Preprocessed loan data
+        is_holdout: Whether this is the holdout dataset (affects feature calculation)
+        
+    Returns:
+        DataFrame with added post-application metrics
+    """
+    if is_holdout:
+        print("Calculating post-September metrics (holdout dataset)...")
+    else:
+        print("Calculating post-September metrics (training dataset)...")
+    
+    # Skip if we don't have the required columns
+    if "cumulative_amount_paid_start" not in df.columns or "nominal_contract_value" not in df.columns:
+        print("  Warning: Required columns for post-September metrics not found, skipping")
+        return df
+    
+    # Add September repayment rate
+    df = df.with_columns([
+        (pl.col("cumulative_amount_paid_start") / pl.col("nominal_contract_value")).alias("post_sept_repayment_rate")
+    ])
+    
+    # Calculate days since contract start to September 1, 2023
+    if "contract_start_date" in df.columns:
+        # Use string parsing approach which is compatible with all Polars versions
+        try:
+            # Create reference date directly in the calculation
+            sept_1_2023_str = "2023-09-01"
+            
+            # Calculate days between dates - using different methods based on Polars version
+            # Use a simpler approach with datetime conversion
+            # Convert contract start date to Unix timestamp (seconds)
+            df = df.with_columns([
+                pl.col("contract_start_date").dt.timestamp().alias("contract_timestamp")
+            ])
+            
+            # Hard-code the September 1, 2023 timestamp (Unix seconds)
+            sept_timestamp = 1693526400  # Sept 1, 2023 00:00:00 UTC timestamp
+            
+            # Calculate days difference by timestamp subtraction and conversion
+            df = df.with_columns([
+                ((sept_timestamp - pl.col("contract_timestamp")) / 86400).alias("post_days_to_sept")
+            ])
+            
+            # Drop temporary column
+            df = df.drop("contract_timestamp")
+        except Exception as e:
+            # If all else fails, use a simple fallback method
+            print(f"  Warning: Date calculation error - {str(e)}")
+            print("  Using fallback date calculation method")
+            
+            # Use a very basic estimate - add a constant value
+            df = df.with_columns([
+                pl.lit(180).alias("post_days_to_sept")  # 6 months as a rough estimate
+            ])
+    
+        # Calculate payment velocity (amount paid per day)
+        # Need to handle the case where days could be zero or negative (shouldn't happen but for safety)
+        df = df.with_columns([
+            (pl.col("cumulative_amount_paid_start") / 
+             pl.when(pl.col("post_days_to_sept") > 0)
+             .then(pl.col("post_days_to_sept"))
+             .otherwise(1))
+             .alias("post_payment_velocity")
+        ])
+    
+    # Calculate payment ratio (how much of the contract value was paid by September)
+    df = df.with_columns([
+        (pl.col("cumulative_amount_paid_start") / pl.col("nominal_contract_value")).alias("post_payment_ratio")
+    ])
+    
+    # Calculate the proportion of deposit to total paid by September
+    # Handle the case where amount paid could be zero
+    df = df.with_columns([
+        (pl.col("deposit_amount") / 
+         pl.when(pl.col("cumulative_amount_paid_start") > 0)
+         .then(pl.col("cumulative_amount_paid_start"))
+         .otherwise(1))
+         .alias("post_deposit_to_paid_ratio")
+    ])
+    
+    # If we also have November data (cumulative_amount_paid), calculate cure rate
+    if "cumulative_amount_paid" in df.columns:
+        df = df.with_columns([
+            (pl.col("cumulative_amount_paid") / pl.col("nominal_contract_value")).alias("post_nov_repayment_rate"),
+            ((pl.col("cumulative_amount_paid") - pl.col("cumulative_amount_paid_start")) / 
+             pl.col("nominal_contract_value")).alias("post_sept_to_nov_increase"),
+        ])
+        
+        # Calculate cure rate (increase in repayment rate from Sept to Nov)
+        df = df.with_columns([
+            (pl.col("post_nov_repayment_rate") - pl.col("post_sept_repayment_rate")).alias("post_cure_rate")
+        ])
+    
+    print("Post-September metrics calculation complete")
+    return df
+
+def engineer_features(df_pandas: pd.DataFrame, sample_size: Optional[int] = None, is_holdout: bool = False) -> pd.DataFrame:
     """
     Combine all feature engineering steps using Polars for high performance.
-    All features are calculated using only data available at loan application time.
+    Features are divided into:
+    1. Application-time features (available at loan decision time)
+    2. Post-application features (prefixed with 'post_', for analysis only)
     
     Args:
         df_pandas: Preprocessed loan data (pandas DataFrame)
         sample_size: Optional sample size for testing (limits rows processed)
+        is_holdout: Whether this is the holdout dataset (affects feature calculation)
         
     Returns:
         pandas DataFrame with all engineered features
@@ -382,6 +489,12 @@ def engineer_features(df_pandas: pd.DataFrame, sample_size: Optional[int] = None
     else:
         df_pandas = df_pandas.copy()
         print(f"Processing all {len(df_pandas)} loans")
+    
+    # Log whether we're processing holdout data
+    if is_holdout:
+        print("Processing HOLDOUT dataset (no November data available)")
+    else:
+        print("Processing TRAINING dataset (with November data)")
     
     # Prepare data for Polars conversion
     df_pandas = prepare_for_polars(df_pandas)
@@ -404,12 +517,30 @@ def engineer_features(df_pandas: pd.DataFrame, sample_size: Optional[int] = None
     # Add temporal features
     df = calculate_temporal_features(df)
     
+    # Add post-September metrics (for insights, not for production models)
+    # Pass the is_holdout flag to the function
+    df = calculate_post_sept_metrics(df, is_holdout=is_holdout)
+    
     # Convert back to pandas
     print("Converting results back to pandas DataFrame...")
     result_df = df.to_pandas()
     
     end_time = time.time()
     print(f"\nFeature engineering complete! Generated {len(result_df.columns)} features in {end_time - start_time:.2f} seconds.")
+    
+    # Add a column to identify which features are post-application (for documentation)
+    post_features = [col for col in result_df.columns if col.startswith('post_')]
+    if post_features:
+        print(f"\nGenerated {len(post_features)} post-application features (prefixed with 'post_'):")
+        for feature in post_features[:5]:
+            print(f"  - {feature}")
+        if len(post_features) > 5:
+            print(f"  - ... and {len(post_features) - 5} more")
+        
+        print("\nWARNING: Post-application features are only available for analysis:")
+        print("  - These features use data collected AFTER loan application")
+        print("  - They should NOT be used in production models")
+        print("  - Only use them for insights and understanding repayment patterns")
     
     return result_df
 

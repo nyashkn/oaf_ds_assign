@@ -11,6 +11,7 @@ plotly
 tabulate
 squarify
 ReportLab
+ydata_profiling
 
 # Machine learning and statistics
 scikit-learn

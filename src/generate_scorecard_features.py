@@ -42,12 +42,14 @@ def main(sample_size=None, full=False, holdout=False):
     if holdout:
         file_path = "data/raw/holdout_loan_processed.csv"
         print("   Processing HOLDOUT dataset")
+        raw_data = analysis.load_data(file_path)
+        df = analysis.prepare_holdout_data(raw_data)
     else:
         file_path = "data/raw/training_loan_processed.csv"
         print("   Processing TRAINING dataset")
+        raw_data = analysis.load_data(file_path)
+        df = analysis.prepare_training_data(raw_data)
         
-    raw_data = analysis.load_data(file_path)
-    df = analysis.preprocess_data(raw_data)
     print(f"   Loaded {len(df)} loans")
     
     # Take a sample if requested (for testing)
@@ -62,7 +64,7 @@ def main(sample_size=None, full=False, holdout=False):
     
     # Apply feature engineering using Polars for better performance
     print("   Applying feature engineering...")
-    df_features = mdp.engineer_features(df)
+    df_features = mdp.engineer_features(df, is_holdout=holdout)
     
     # Add geographic features
     print("   Adding geographic features...")
@@ -121,7 +123,8 @@ def main(sample_size=None, full=False, holdout=False):
         "Temporal": [col for col in df_features.columns 
                    if any(x in col for x in ['day', 'month', 'quarter', 'weekend'])],
         "Geographic": [col for col in df_features.columns 
-                      if any(x in col for x in ['distance_to', 'coords_imputed'])]
+                      if any(x in col for x in ['distance_to', 'coords_imputed'])],
+        "Post-Application": [col for col in df_features.columns if col.startswith('post_')]
     }
     
     for group, columns in feature_groups.items():
@@ -173,6 +176,7 @@ def geocode_dukas(force_refresh=False):
     # Load data
     print("\n1. Loading data...")
     raw_data = analysis.load_data("data/raw/training_loan_processed.csv")
+    # Use common preprocessing since we only need basic fields for geocoding
     df = analysis.preprocess_data(raw_data)
     
     # Get unique dukas
