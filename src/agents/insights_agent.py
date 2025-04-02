@@ -14,6 +14,8 @@ import pymupdf as fitz
 import numpy as np
 from PIL import Image
 
+import litellm
+litellm._turn_on_debug()
 # Configure the Phoenix tracer
 # tracer_provider = register(
 #     project_name="tupande_insights",

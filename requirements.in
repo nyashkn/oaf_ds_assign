@@ -41,6 +41,9 @@ jupyter
 jupyterlab
 quarto
 jupyter-cache
+jupyter-ai[all]
+langchain-aws
+jupyter_ai_magics
 
 # Utilities
 python-dateutil
