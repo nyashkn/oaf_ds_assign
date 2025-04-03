@@ -3,9 +3,15 @@
 Modular Regression-based Loan Repayment Rate Prediction Script
 
 This script demonstrates the regression-based approach for predicting loan
-repayment rates as an alternative to binary classification. It provides a 
-side-by-side comparison of regression vs. classification approaches with
-profitability analysis at different thresholds.
+repayment rates as an alternative to binary classification. It provides:
+
+1. A complete regression modeling workflow with data preprocessing, feature selection
+2. Comparison of regression vs. classification approaches
+3. Profitability analysis at different thresholds
+4. Comparison of model performance with/without September payment data
+
+The script generates comprehensive reports to help understand the tradeoffs
+between different modeling approaches and threshold selection.
 """
 
 import os
@@ -42,6 +48,23 @@ from src.scorecard_regression import (
     analyze_multiple_thresholds,
     analyze_cutoff_tradeoffs,
     calculate_business_metrics
+)
+
+# Import model comparison module
+from src.scorecard_regression.model_comparison import (
+    APPLICATION_FEATURES,
+    SEPTEMBER_PAYMENT_FEATURES,
+    filter_features,
+    feature_importance_comparison,
+    evaluate_model,
+    analyze_model_profit,
+    compare_models
+)
+
+# Import reporting module
+from src.scorecard_regression.reporting import (
+    ModelComparisonReport,
+    create_markdown_report
 )
 
 def parse_arguments():
@@ -206,10 +229,22 @@ def main():
     selected_features = selection_results['selected_features']
     print(f"Selected {len(selected_features)} features for modeling")
     
-    # Prepare datasets with selected features
-    X_train = partitioned_data['train'][selected_features]
+    # Prepare datasets with selected features and handle missing values
+    from sklearn.impute import SimpleImputer
+    imputer = SimpleImputer(strategy='mean')
+    
+    X_train = pd.DataFrame(
+        imputer.fit_transform(partitioned_data['train'][selected_features]),
+        columns=selected_features,
+        index=partitioned_data['train'].index
+    )
     y_train = partitioned_data['train'][args.target]
-    X_test = partitioned_data['test'][selected_features]
+    
+    X_test = pd.DataFrame(
+        imputer.transform(partitioned_data['test'][selected_features]),
+        columns=selected_features,
+        index=partitioned_data['test'].index
+    )
     y_test = partitioned_data['test'][args.target]
     
     # Save test set loan values for later profitability analysis
@@ -391,6 +426,119 @@ def main():
                     'relative': float(comparison_result['performance_difference']['roi']['relative'])
                 }
             }
+        }
+    }
+    
+    # Step 11/12: Compare models with/without September payment data
+    print(f"\n[STEP {'12' if args.cross_validate else '11'}] Comparing models with/without September payment data...")
+    
+    # Create directory for model comparison
+    model_comparison_dir = os.path.join(version_path, "model_comparison")
+    os.makedirs(model_comparison_dir, exist_ok=True)
+    
+    # Filter features for Model 1 (application-time features only)
+    print("\n===== MODEL 1: Application-Time Features Only =====")
+    # Filter features for Model 1 (application-time features only)
+    X_train_app, encoder_dict1 = filter_features(partitioned_data['train'], APPLICATION_FEATURES)
+    X_test_app, _ = filter_features(partitioned_data['test'], APPLICATION_FEATURES, encoder_dict=encoder_dict1)
+    
+    # Train Model 1
+    model1 = train_regression_model(X_train_app, y_train, model_type=args.reg_model, model_params=model_params)['model']
+    
+    # Evaluate Model 1
+    model1_eval = evaluate_model(model1, X_test_app, y_test, "Model 1 (Application Features)")
+    
+    # Filter features for Model 2 (application + September payment features)
+    print("\n===== MODEL 2: With September Payment Data =====")
+    model2_features = list(set(APPLICATION_FEATURES + SEPTEMBER_PAYMENT_FEATURES))
+    X_train_full, encoder_dict2 = filter_features(partitioned_data['train'], model2_features)
+    X_test_full, _ = filter_features(partitioned_data['test'], model2_features, encoder_dict=encoder_dict2)
+    
+    # Train Model 2
+    model2 = train_regression_model(X_train_full, y_train, model_type=args.reg_model, model_params=model_params)['model']
+    
+    # Evaluate Model 2
+    model2_eval = evaluate_model(model2, X_test_full, y_test, "Model 2 (With September Data)")
+    
+    # Analyze model profits at different thresholds
+    from src.scorecard_regression.model_comparison.comparison import analyze_model_profit
+    
+    # Define thresholds if not provided
+    if thresholds is None:
+        thresholds = np.arange(0.5, 0.95, 0.02)
+        thresholds = [round(t, 2) for t in thresholds]
+    
+    # Analyze profit metrics for both models
+    model1_profit = analyze_model_profit(
+        y_test, 
+        model1_eval['predictions'], 
+        test_loan_values,
+        thresholds, 
+        "model1",
+        model_comparison_dir
+    )
+    
+    model2_profit = analyze_model_profit(
+        y_test, 
+        model2_eval['predictions'], 
+        test_loan_values,
+        thresholds, 
+        "model2",
+        model_comparison_dir
+    )
+    
+    # Combine results
+    model1_results = {
+        'predictions': model1_eval['predictions'],
+        'metrics': model1_eval['metrics'],
+        'profit_analysis': model1_profit
+    }
+    
+    model2_results = {
+        'predictions': model2_eval['predictions'],
+        'metrics': model2_eval['metrics'],
+        'profit_analysis': model2_profit
+    }
+    
+    # Compare the models
+    from src.scorecard_regression.model_comparison.comparison import compare_models
+    comparison = compare_models(model1_results, model2_results, model_comparison_dir)
+    
+    # Create feature importance comparison
+    feature_importance_comparison(
+        model1, model2, 
+        list(X_train_app.columns), list(X_train_full.columns),
+        model_comparison_dir
+    )
+    
+    # Generate comparison reports
+    print("\n===== GENERATING MODEL COMPARISON REPORTS =====")
+    
+    # Create the PDF report
+    report_generator = ModelComparisonReport(
+        data_dir=model_comparison_dir,
+        output_dir=model_comparison_dir
+    )
+    pdf_path = report_generator.generate_report()
+    
+    # Create the Markdown report
+    md_path = create_markdown_report(
+        data_dir=model_comparison_dir,
+        output_dir=model_comparison_dir
+    )
+    
+    print(f"\nModel comparison reports generated:")
+    print(f"  - PDF Report: {pdf_path}")
+    print(f"  - Markdown Report: {md_path}")
+    
+    # Update summary with model comparison results
+    summary['model_comparison'] = {
+        'performance_improvement': comparison['performance_improvement'],
+        'profit_improvement': comparison['profit_improvement'],
+        'roi_improvement': comparison['roi_improvement'],
+        'reports': {
+            'pdf': pdf_path,
+            'markdown': md_path
         }
     }
     

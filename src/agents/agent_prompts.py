@@ -42,19 +42,24 @@ def get_pdf_analysis_prompt(output_path: str, context: Dict[str, Any] = None) ->
        - Take notes on important information from each batch
        - Focus on key metrics, tables, and charts
        - Pay special attention to variable importance rankings and WOE binning plots
+       
+    4. Use the human_intervention tool when you need help:
+       - For clarification: `human_intervention("clarification", "Your question here")`
+       - For approval: `human_intervention("approval", "Confirm this action?")`
+       - For choices: `human_intervention("multiple_choice", "Which option?", ["Option 1", "Option 2"])`
     
-    4. After reviewing all batches, synthesize your findings:
+    5. After reviewing all batches, synthesize your findings:
        - Identify the most significant predictors of loan repayment
        - Analyze geographic factors impact
        - Examine historical behavior patterns
        - Identify risk segments
        - Assess model performance
     
-    5. Generate actionable insights connecting model findings to business context:
+    6. Generate actionable insights connecting model findings to business context:
        - For each insight, explain: what is the pattern, why it matters, and what action to take
        - Suggest visualizations to support each insight
     
-    6. Output your findings in a structured markdown document:
+    7. Output your findings in a structured markdown document:
        - Use `write_file()` to save to '{output_path}'
        - Include clear sections, bulleted lists, and recommendations
     
@@ -99,7 +104,12 @@ def get_feature_engineering_prompt(output_path: str, dataset_path: str, context:
        - Use `read_file()` to examine data documentation if available
        - Analyze column distributions and relationships
     
-    2. Create a comprehensive feature engineering script that:
+    2. If you encounter any questions or need clarification, use:
+       - `human_intervention("clarification", "Your specific question here")` 
+       - For choices between approaches: `human_intervention("multiple_choice", "Which approach?", ["Approach 1", "Approach 2"])`
+       - For approval: `human_intervention("approval", "Should I proceed with this transformation?")`
+    
+    3. Create a comprehensive feature engineering script that:
        - Handles missing values appropriately
        - Creates features based on domain knowledge about agricultural lending
        - Implements temporal features from any time-related columns
@@ -108,13 +118,13 @@ def get_feature_engineering_prompt(output_path: str, dataset_path: str, context:
        - Implements one-hot encoding for categorical variables
        - Creates features that capture geographical patterns
     
-    3. Produce code that:
+    4. Produce code that:
        - Is well-documented with comments explaining the rationale for each feature
        - Is modular and reusable
        - Includes validation to ensure feature quality
        - Outputs a clean feature dataset ready for modeling
     
-    4. Write the complete feature engineering script to '{output_path}'
+    5. Write the complete feature engineering script to '{output_path}'
     
     ## Output
     Your output should be a complete Python script that:

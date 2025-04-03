@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 from tqdm import tqdm
+from PyPDF2 import PdfMerger
+import weasyprint
 
 def enhanced_repayment_eda(df, sample_size=None, output_dir='repayment_eda_output', random_state=42):
     """
@@ -29,15 +31,16 @@ def enhanced_repayment_eda(df, sample_size=None, output_dir='repayment_eda_outpu
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
+    # Create a directory for individual PDFs (will be merged later)
+    pdf_dir = f"{output_dir}/individual_pdfs"
+    os.makedirs(pdf_dir, exist_ok=True)
+    
     print("Starting enhanced repayment rate analysis...")
     
-    # Rest of your function remains the same
-    # ... (all the existing code)
-
     # 1. Data preparation with progress tracking
     steps = ["Data preparation", "Feature engineering", "Univariate analysis", 
              "Target metrics", "Categorical analysis", "Multivariate analysis", 
-             "Time-based analysis", "PDF report generation", "CSV exports"]
+             "Time-based analysis", "PDF report generation", "CSV exports", "PDF merging"]
     
     with tqdm(total=len(steps), desc="EDA Progress") as pbar:
         # Step 1: Data preparation
@@ -192,7 +195,6 @@ def enhanced_repayment_eda(df, sample_size=None, output_dir='repayment_eda_outpu
         pbar.update(1)
         
         # Step 8: Generate profile report with ydata-profiling
-        # For large samples, we might want to reduce the depth to speed up processing
         minimal_mode = sample_size is not None and sample_size >= 10000
         
         profile = ProfileReport(
@@ -204,19 +206,23 @@ def enhanced_repayment_eda(df, sample_size=None, output_dir='repayment_eda_outpu
                 "pearson": {"calculate": True},
                 "spearman": {"calculate": True},
                 "kendall": {"calculate": True},
-                "phi_k": {"calculate": not minimal_mode},  # Computationally expensive
-                "cramers": {"calculate": not minimal_mode}  # Computationally expensive
+                "phi_k": {"calculate": not minimal_mode},
+                "cramers": {"calculate": not minimal_mode}
             },
             interactions={
-                "continuous": not minimal_mode  # Disable for large samples to improve performance
+                "continuous": not minimal_mode
             }
         )
         
-        # Save as HTML (can be printed to PDF)
+        # Save HTML report
         profile.to_file(f"{output_dir}/repayment_profile_report.html")
+        
+        # Convert HTML to PDF using weasyprint
+        weasyprint.HTML(f"{output_dir}/repayment_profile_report.html").write_pdf(
+            f"{pdf_dir}/01_profile_report.pdf")
         pbar.update(1)
         
-        # Step 9: Custom visualizations and CSV exports
+        # Step 9: Custom visualizations and save to individual PDFs
         # Prepare a multi-page PDF with key visualizations
         plt.figure(figsize=(12, 8))
         
@@ -250,7 +256,7 @@ def enhanced_repayment_eda(df, sample_size=None, output_dir='repayment_eda_outpu
         plt.legend()
         
         plt.tight_layout()
-        plt.savefig(f"{output_dir}/repayment_time_analysis.pdf")
+        plt.savefig(f"{pdf_dir}/02_repayment_time_analysis.pdf")
         
         # Create a second visualization page focusing on categorical breakdowns
         if len(categorical_vars) > 0 and all(cat in df.columns for cat in categorical_vars[:2]):
@@ -292,8 +298,124 @@ def enhanced_repayment_eda(df, sample_size=None, output_dir='repayment_eda_outpu
             plt.xticks(rotation=45)
             
             plt.tight_layout()
-            plt.savefig(f"{output_dir}/repayment_categorical_analysis.pdf")
+            plt.savefig(f"{pdf_dir}/03_repayment_categorical_analysis.pdf")
         
+        # Additional visualizations
+        
+        # 1. Create correlation heatmap
+        plt.figure(figsize=(12, 10))
+        mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+        sns.heatmap(corr_matrix, annot=True, mask=mask, cmap='coolwarm', fmt='.2f')
+        plt.title('Correlation Matrix of Key Metrics')
+        plt.tight_layout()
+        plt.savefig(f"{pdf_dir}/04_correlation_heatmap.pdf")
+        
+        # 2. Create summary statistics visualization
+        plt.figure(figsize=(12, 6))
+        
+        # Key metrics chart
+        plt.subplot(1, 2, 1)
+        key_metrics = pd.DataFrame({
+            'Metric': ['Sept Repayment', 'Nov Repayment', 'Improvement', 'Cure Rate'],
+            'Value': [
+                portfolio_metrics['avg_sept_repayment'],
+                portfolio_metrics['avg_nov_repayment'],
+                portfolio_metrics['overall_cure_rate'],
+                portfolio_metrics['pct_cured']
+            ]
+        })
+        sns.barplot(x='Metric', y='Value', data=key_metrics)
+        plt.title('Key Portfolio Metrics')
+        plt.xticks(rotation=45)
+        
+        # Below target chart
+        plt.subplot(1, 2, 2)
+        below_target = pd.DataFrame({
+            'Time Point': ['September', 'November'],
+            'Below Target (%)': [
+                portfolio_metrics['sept_below_target'] * 100,
+                portfolio_metrics['nov_below_target'] * 100
+            ]
+        })
+        sns.barplot(x='Time Point', y='Below Target (%)', data=below_target)
+        plt.title('Accounts Below Target (98%)')
+        
+        plt.tight_layout()
+        plt.savefig(f"{pdf_dir}/05_key_metrics.pdf")
+        
+        # 3. Create bucket transition visualization
+        plt.figure(figsize=(10, 8))
+        transition_matrix = pd.crosstab(
+            df['sept_repayment_bucket'], 
+            df['nov_repayment_bucket'],
+            normalize='index'
+        )
+        
+        sns.heatmap(transition_matrix, annot=True, cmap='YlGnBu', fmt='.2f')
+        plt.title('Transition Matrix: Sept to Nov Repayment Buckets')
+        plt.xlabel('November Repayment Bucket')
+        plt.ylabel('September Repayment Bucket')
+        plt.tight_layout()
+        plt.savefig(f"{pdf_dir}/06_transition_matrix.pdf")
+        
+        # 4. Create table of contents/executive summary
+        plt.figure(figsize=(8.5, 11))  # Standard letter size
+        plt.text(0.5, 0.95, 'Repayment Analysis Report', 
+                 fontsize=24, ha='center', va='top', weight='bold')
+        
+        plt.text(0.5, 0.9, f'Analysis Date: {pd.Timestamp.now().strftime("%Y-%m-%d")}', 
+                 fontsize=14, ha='center', va='top')
+        
+        if sample_size:
+            plt.text(0.5, 0.85, f'Sample Analysis: {sample_size:,} accounts from {len(df):,} total', 
+                    fontsize=14, ha='center', va='top', style='italic')
+        
+        # Table of contents
+        y_pos = 0.75
+        plt.text(0.1, y_pos, 'Table of Contents:', fontsize=16, weight='bold')
+        y_pos -= 0.05
+        
+        toc_items = [
+            '1. Executive Summary & Key Metrics',
+            '2. Time Analysis (Sept vs Nov Comparison)',
+            '3. Categorical Breakdowns (Region, Loan Type)',
+            '4. Correlation Analysis',
+            '5. Transition Matrix',
+            '6. Detailed Statistical Reports'
+        ]
+        
+        for item in toc_items:
+            y_pos -= 0.03
+            plt.text(0.15, y_pos, item, fontsize=14)
+        
+        # Executive summary box
+        plt.text(0.1, 0.5, 'Executive Summary:', fontsize=16, weight='bold')
+        
+        summary_text = [
+            f"• Total Portfolio: {portfolio_metrics['total_contracts']:,} loans",
+            f"• Total Value: ${portfolio_metrics['total_contract_value']:,.2f}",
+            f"• Sept Repayment Rate: {portfolio_metrics['avg_sept_repayment']:.2%}",
+            f"• Nov Repayment Rate: {portfolio_metrics['avg_nov_repayment']:.2%}",
+            f"• Improvement: {portfolio_metrics['overall_cure_rate']:.2%}",
+            f"• Below Target (Sept): {portfolio_metrics['sept_below_target']:.2%}",
+            f"• Below Target (Nov): {portfolio_metrics['nov_below_target']:.2%}",
+            f"• Accounts Cured: {portfolio_metrics['pct_cured']:.2%}"
+        ]
+        
+        y_pos = 0.45
+        for line in summary_text:
+            y_pos -= 0.03
+            plt.text(0.15, y_pos, line, fontsize=12)
+        
+        # Add footer
+        plt.text(0.5, 0.05, 'Generated with Python EDA Analysis Tool', 
+                 fontsize=10, ha='center', va='bottom', style='italic')
+        
+        # Remove axis for cleaner look
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(f"{pdf_dir}/00_title_page.pdf")
+                
         # Save all analysis objects to CSV
         univariate_df.to_csv(f"{output_dir}/univariate_statistics.csv")
         pd.DataFrame(portfolio_metrics, index=[0]).to_csv(f"{output_dir}/portfolio_metrics.csv")
@@ -307,18 +429,29 @@ def enhanced_repayment_eda(df, sample_size=None, output_dir='repayment_eda_outpu
         for metric, data in cross_tabs.items():
             data.to_csv(f"{output_dir}/crosstab_{metric}.csv")
         
-        # Additional CSV for transition matrix - Sept to Nov repayment buckets
-        transition = pd.crosstab(
-            df['sept_repayment_bucket'], 
-            df['nov_repayment_bucket'],
-            normalize='index'
-        )
+        # Additional CSV for transition matrix
         transition.to_csv(f"{output_dir}/repayment_bucket_transition.csv")
         
         # Export augmented dataset
         df.to_csv(f"{output_dir}/augmented_repayment_data.csv", index=False)
         pbar.update(1)
+        
+        # Step 10: Merge all PDFs into one combined file
+        print("Merging PDFs into a single report...")
+        merger = PdfMerger()
+        
+        # Get all PDF files in the pdf_dir and sort them
+        pdf_files = sorted([f for f in os.listdir(pdf_dir) if f.endswith('.pdf')])
+        
+        # Add each PDF to the merger
+        for pdf in pdf_files:
+            merger.append(f"{pdf_dir}/{pdf}")
+        
+        # Write the merged PDF to the output directory
+        merger.write(f"{output_dir}/combined_repayment_analysis.pdf")
+        merger.close()
+        pbar.update(1)
     
-    print(f"EDA completed! Reports and data saved to {output_dir}/")
+    print(f"EDA completed! Combined PDF report saved to {output_dir}/combined_repayment_analysis.pdf")
     
     return df

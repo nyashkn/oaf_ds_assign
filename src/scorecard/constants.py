@@ -19,6 +19,13 @@ EXCLUDE_VARS = [
     'nov_23_repayment_rate',
     'months_since_start',
     'days_since_start'
+    
+    # Derived payment features
+    'post_payment_velocity',
+    'post_days_to_sept',
+    'post_payment_ratio',
+    'post_deposit_to_paid_ratio',
+    'post_sept_repayment_rate'
 ]
 
 # Date patterns to identify date-formatted columns

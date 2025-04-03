@@ -19,6 +19,7 @@ from agent_tools import (
     add_pdf_images_callback
 )
 from agent_prompts import get_pdf_analysis_prompt, get_feature_engineering_prompt
+from human_intervention import human_intervention
 
 # Load environment variables
 load_dotenv()
@@ -61,7 +62,12 @@ def create_agent(model_id: str, task_type: str) -> CodeAgent:
     
     # Create the agent with appropriate tools and callbacks
     agent = CodeAgent(
-        tools=[open_pdf, get_next_pdf_batch, read_file, write_file, list_directory],
+        tools=[
+            # File and PDF tools
+            open_pdf, get_next_pdf_batch, read_file, write_file, list_directory,
+            # Human-in-the-loop tool
+            human_intervention
+        ],
         model=model,
         verbosity_level=2,  # Detailed output
         planning_interval=3,

@@ -12,6 +12,9 @@ tabulate
 squarify
 ReportLab
 ydata_profiling
+fpdf
+PyPDF2
+weasyprint
 
 # Machine learning and statistics
 scikit-learn

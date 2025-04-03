@@ -12,3 +12,4 @@ src/scorecard_regression/reporting/styles/__pycache__/*
 src/scorecard_regression/reporting/__pycache__/*
 src/agents/__pycache__/*
 src/features/__pycache__/*
+src/scorecard_regression/model_comparison/__pycache__/*
