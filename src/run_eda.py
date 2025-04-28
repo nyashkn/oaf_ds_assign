@@ -1,4 +1,4 @@
-from eda_analysis import create_sample_data, enhanced_repayment_eda
+from eda_analysis import enhanced_repayment_eda
 import pandas as pd
 
 # Load your data

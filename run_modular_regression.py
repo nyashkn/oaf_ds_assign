@@ -74,6 +74,8 @@ def parse_arguments():
     # Data parameters
     parser.add_argument('--features', type=str, default="data/processed/all_features.csv",
                        help='Path to features CSV file')
+    parser.add_argument('--holdout', type=str, default=None,
+                       help='Path to holdout features CSV file')
     parser.add_argument('--target', type=str, default='sept_23_repayment_rate',
                        help='Target variable name (continuous repayment rate)')
     parser.add_argument('--id-col', type=str, default='client_id',
@@ -546,6 +548,98 @@ def main():
     summary_path = os.path.join(version_path, "summary.json")
     with open(summary_path, 'w') as f:
         json.dump(summary, f, indent=2)
+    
+    # Step 12/13: Evaluate on holdout set if provided
+    if args.holdout:
+        print(f"\n[STEP {'13' if args.cross_validate else '12'}] Evaluating on holdout set...")
+        try:
+            # Load holdout data
+            holdout_df = pd.read_csv(args.holdout)
+            print(f"Loaded holdout data from {args.holdout}: {holdout_df.shape[0]} rows, {holdout_df.shape[1]} columns")
+            
+            # Get holdout target and loan values
+            holdout_y = holdout_df[args.target]
+            holdout_loan_values = holdout_df[args.loan_value_col] if args.loan_value_col in holdout_df.columns else np.ones(len(holdout_df))
+            
+            # Get the exact features used in training for both models
+            model1_train_features = list(X_train_app.columns)
+            model2_train_features = list(X_train_full.columns)
+            
+            # Filter and prepare holdout features for Model 1
+            holdout_app, _ = filter_features(holdout_df, APPLICATION_FEATURES, encoder_dict=encoder_dict1)
+            
+            # Ensure holdout features match training features exactly
+            holdout_app = holdout_app[model1_train_features]
+            
+            # Evaluate Model 1 on holdout
+            print("\n===== MODEL 1: Holdout Evaluation =====")
+            holdout_model1_eval = evaluate_model(model1, holdout_app, holdout_y, "Model 1 (Holdout)")
+            
+            # Filter and prepare holdout features for Model 2
+            holdout_full, _ = filter_features(holdout_df, model2_features, encoder_dict=encoder_dict2)
+            
+            # Ensure holdout features match training features exactly
+            holdout_full = holdout_full[model2_train_features]
+            
+            # Evaluate Model 2 on holdout
+            print("\n===== MODEL 2: Holdout Evaluation =====")
+            holdout_model2_eval = evaluate_model(model2, holdout_full, holdout_y, "Model 2 (Holdout)")
+            
+            # Analyze profits on holdout set
+            holdout_model1_profit = analyze_model_profit(
+                holdout_y,
+                holdout_model1_eval['predictions'],
+                holdout_loan_values,
+                thresholds,
+                "model1_holdout",
+                model_comparison_dir
+            )
+            
+            holdout_model2_profit = analyze_model_profit(
+                holdout_y,
+                holdout_model2_eval['predictions'],
+                holdout_loan_values,
+                thresholds,
+                "model2_holdout",
+                model_comparison_dir
+            )
+            
+            # Convert DataFrame values to Python native types for JSON serialization
+            def convert_for_json(obj):
+                if isinstance(obj, pd.DataFrame):
+                    return obj.to_dict(orient='records')
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, (np.int64, np.int32)):
+                    return int(obj)
+                elif isinstance(obj, (np.float64, np.float32)):
+                    return float(obj)
+                elif isinstance(obj, dict):
+                    return {k: convert_for_json(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_for_json(v) for v in obj]
+                return obj
+
+            # Add holdout results to summary
+            summary['holdout_evaluation'] = {
+                'model1': {
+                    'metrics': convert_for_json(holdout_model1_eval['metrics']),
+                    'profit_analysis': convert_for_json(holdout_model1_profit)
+                },
+                'model2': {
+                    'metrics': convert_for_json(holdout_model2_eval['metrics']),
+                    'profit_analysis': convert_for_json(holdout_model2_profit)
+                }
+            }
+            
+            # Save updated summary
+            with open(summary_path, 'w') as f:
+                json.dump(summary, f, indent=2)
+            
+            print("\nHoldout evaluation complete. Results added to summary.")
+            
+        except Exception as e:
+            print(f"Error evaluating on holdout set: {str(e)}")
     
     print(f"\nAnalysis complete. Results saved to {version_path}")
     print(f"Summary saved to {summary_path}")
